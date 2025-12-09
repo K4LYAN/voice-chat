@@ -1,0 +1,968 @@
+/* Component Styles */
+
+/* Buttons */
+.btn {
+  padding: 14px 28px;
+  border-radius: 50px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 1rem;
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: width 0.6s, height 0.6s, top 0.6s, left 0.6s;
+  transform: translate(-50%, -50%);
+}
+
+.btn:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.btn-primary {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+  background-color: #333;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 2px solid var(--border);
+  margin-left: var(--spacing-md);
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-primary);
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  transform: translateY(-2px);
+}
+
+/* Navbar */
+.navbar {
+  height: var(--header-height);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  z-index: 100;
+  transition: box-shadow 0.3s ease;
+}
+
+.navbar.scrolled {
+  box-shadow: var(--shadow-md);
+}
+
+.nav-container {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
+.nav-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.lang-badge {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, #e8e8e8 100%);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  animation: fadeInScale 0.4s ease-out;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Hero */
+.hero {
+  padding: 100px 0 80px;
+  text-align: center;
+  position: relative;
+}
+
+.hero-title {
+  font-size: 3.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: var(--spacing-lg);
+  letter-spacing: -1.5px;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.highlight {
+  background: linear-gradient(135deg, var(--text-secondary) 0%, var(--text-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto var(--spacing-xl);
+  animation: fadeIn 0.8s ease-out 0.2s both;
+}
+
+.hero-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+  align-items: center;
+  animation: fadeIn 0.8s ease-out 0.4s both;
+}
+
+/* Features */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--spacing-lg);
+  padding: var(--spacing-2xl) var(--spacing-md);
+}
+
+.feature-card {
+  padding: var(--spacing-xl);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--text-primary), var(--text-secondary));
+  transform: scaleX(0);
+  transition: transform 0.4s ease;
+}
+
+.feature-card:hover::before {
+  transform: scaleX(1);
+}
+
+.feature-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border);
+  background: var(--bg-primary);
+}
+
+.feature-card:nth-child(1) {
+  animation: fadeInScale 0.6s ease-out 0.2s both;
+}
+
+.feature-card:nth-child(2) {
+  animation: fadeInScale 0.6s ease-out 0.4s both;
+}
+
+.feature-card:nth-child(3) {
+  animation: fadeInScale 0.6s ease-out 0.6s both;
+}
+
+.feature-card h3 {
+  margin-bottom: var(--spacing-md);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.feature-card p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* Footer */
+.footer {
+  margin-top: auto;
+  padding: var(--spacing-2xl) 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-links {
+  display: flex;
+  gap: var(--spacing-lg);
+}
+
+.footer-links a {
+  transition: color 0.3s ease;
+  position: relative;
+}
+
+.footer-links a::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--text-primary);
+  transition: width 0.3s ease;
+}
+
+.footer-links a:hover::after {
+  width: 100%;
+}
+
+.footer-links a:hover {
+  color: var(--text-primary);
+}
+
+.trust-badges {
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.trust-badges:hover {
+  opacity: 1;
+}
+
+/* Landing Language Grid */
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl) 0;
+}
+
+.lang-card {
+  background: var(--bg-primary);
+  border: 2px solid var(--border);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.lang-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(26, 26, 26, 0.05), transparent);
+  transition: left 0.5s ease;
+}
+
+.lang-card:hover::before {
+  left: 100%;
+}
+
+.lang-card:hover {
+  border-color: var(--text-primary);
+  background: var(--bg-secondary);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: var(--shadow-md);
+}
+
+.lang-card:active {
+  transform: translateY(-2px) scale(1);
+}
+
+/* Chat Interface */
+/* Chat Interface */
+/* Chat Interface */
+.chat-layout {
+  display: grid;
+  grid-template-columns: 1fr 450px;
+  /* Wider sidebar for bigger videos */
+  gap: var(--spacing-lg);
+  min-height: calc(100dvh - 160px);
+  padding: var(--spacing-lg);
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.chat-main {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 500px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  /* Subtle glass border */
+  animation: slideInFromLeft 0.5s ease-out;
+}
+
+.messages-area {
+  flex: 1;
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-height: 300px;
+}
+
+.message-bubble {
+  padding: 14px 20px;
+  border-radius: 18px;
+  max-width: 75%;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-bottom: var(--spacing-xs);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease;
+  word-wrap: break-word;
+}
+
+.message-bubble:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.message-bubble.me {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.message-bubble.partner {
+  align-self: flex-start;
+  background-color: white;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.input-area {
+  padding: var(--spacing-lg);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 50px;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s ease;
+  background: var(--bg-primary);
+  box-shadow: inner 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.chat-input:focus {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Video Sidebar */
+.video-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  animation: slideInFromRight 0.5s ease-out;
+}
+
+.video-card {
+  background: #111;
+  border-radius: var(--radius-lg);
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  position: relative;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.video-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.video-card video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: radial-gradient(circle at center, #222 0%, #000 100%);
+  pointer-events: none;
+}
+
+.controls-card {
+  background: white;
+  padding: var(--spacing-md);
+  border-radius: 50px;
+  /* Pill shape container */
+  display: flex;
+  flex-direction: row;
+  /* Single line */
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+}
+
+.controls-primary,
+.controls-secondary {
+  display: contents;
+  /* Remove wrapper layout impact */
+}
+
+.controls-divider {
+  display: none;
+  /* No divider needed in single row */
+}
+
+.control-btn {
+  width: auto !important;
+  flex: 1;
+  margin: 0 !important;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-radius: 25px;
+  /* Pill buttons */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-danger {
+  background-color: #fff;
+  color: var(--danger);
+  border: 2px solid var(--danger);
+}
+
+.btn-danger:hover {
+  background-color: var(--danger);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.controls-card button {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+
+/* Searching State */
+.searching-state {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.5s ease-out;
+  padding: var(--spacing-2xl);
+}
+
+.searching-state h2 {
+  animation: pulse 2s ease-in-out infinite;
+  margin-bottom: var(--spacing-md);
+}
+
+.loader {
+  width: 52px;
+  height: 52px;
+  border: 4px solid var(--border);
+  border-radius: 50%;
+  border-top-color: var(--text-primary);
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--spacing-lg);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design */
+
+/* Large Tablets and Small Desktops */
+@media (max-width: 1200px) {
+  .hero-title {
+    font-size: 3rem;
+  }
+
+  .chat-layout {
+    grid-template-columns: 1fr 320px;
+    gap: var(--spacing-md);
+  }
+}
+
+/* Tablets */
+@media (max-width: 968px) {
+  .container {
+    padding: 0 var(--spacing-lg);
+  }
+
+  .hero {
+    padding: 60px 0 40px;
+  }
+
+  .hero-title {
+    font-size: 2.75rem;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+
+  .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .btn-secondary {
+    margin-left: 0;
+    margin-top: var(--spacing-sm);
+  }
+
+  .features {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--spacing-md);
+    padding: var(--spacing-xl) var(--spacing-md);
+  }
+
+  .chat-layout {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    min-height: auto;
+  }
+
+  .chat-main {
+    min-height: 450px;
+  }
+
+  .video-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+  }
+
+  .controls-card {
+    grid-column: 1 / -1;
+  }
+
+  .navbar {
+    height: 60px;
+  }
+
+  .logo {
+    font-size: 1.1rem;
+  }
+}
+
+/* Mobile Landscape and Small Tablets */
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 2.25rem;
+    letter-spacing: -1px;
+  }
+
+  .hero-subtitle {
+    font-size: 1.1rem;
+  }
+
+  .landing-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: var(--spacing-sm);
+  }
+
+  .lang-card {
+    padding: var(--spacing-md);
+    font-size: 0.95rem;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    text-align: center;
+  }
+
+  .footer-links {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+}
+
+/* Mobile Portrait */
+@media (max-width: 640px) {
+  :root {
+    --spacing-2xl: 48px;
+  }
+
+  .container {
+    padding: 0 var(--spacing-md);
+  }
+
+  .hero {
+    padding: 40px 0 30px;
+  }
+
+  .hero-title {
+    font-size: 1.875rem;
+    line-height: 1.2;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .hero-subtitle {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .hero-actions {
+    gap: var(--spacing-sm);
+  }
+
+  .btn {
+    padding: 12px 20px;
+    font-size: 0.95rem;
+  }
+
+  .features {
+    grid-template-columns: 1fr;
+    padding: var(--spacing-lg) var(--spacing-md);
+    gap: var(--spacing-md);
+  }
+
+  .feature-card {
+    padding: var(--spacing-lg);
+  }
+
+  .landing-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+  }
+
+  .lang-card {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+
+  .chat-layout {
+    position: fixed;
+    top: 56px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #f0f2f5;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+    gap: 0;
+  }
+
+  .chat-layout>* {
+    min-height: 0;
+    /* Fix flex child overflow */
+  }
+
+  .chat-main {
+    flex: 1;
+    /* Take up all available space */
+    min-height: 0;
+    /* Allow scrolling inside */
+    border-radius: 20px 20px 0 0;
+    /* rounded top */
+    background: white;
+    margin-top: -10px;
+    /* Overlap video slightly */
+    z-index: 10;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    order: 2;
+  }
+
+  .messages-area {
+    padding: var(--spacing-md);
+    /* min-height removed to allow flex to work properly */
+  }
+
+  .message-bubble {
+    max-width: 85%;
+    font-size: 0.95rem;
+    padding: 10px 14px;
+  }
+
+  .input-area {
+    /* Inside chat-main */
+    padding: 10px;
+    background: white;
+    border-top: 1px solid #eee;
+    gap: var(--spacing-xs);
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  /* 3. Controls & Input (Bottom) */
+  /* We'll wrap controls and input visually if needed, but they are separate in DOM.
+     Controls in .video-sidebar wrapper in DOM is annoying? 
+     No, controls-card is separate in DOM. 
+     Wait, .video-sidebar contains .controls-card in App.jsx.
+     We need to pull .controls-card out visually or handle it.
+  */
+
+  /* In App.jsx, controls-card IS inside video-sidebar. 
+     We need to use absolute positioning or hacks to move it if we want it at bottom.
+     OR, we make video-sidebar the flex container for the whole screen? No.
+     
+     Solution: Make .video-sidebar `display: contents` and style its children?
+     No, video-sidebar has other children.
+     
+     We need a container for videos to sit at top. We don't have one in DOM.
+     We can use `order` to move them.
+  */
+
+
+  /* Actually with display contents, the grid/flex of parent applies. 
+     Parent is .chat-layout (flex-col).
+     This means video cards would be stacked vertically if we don't group them.
+     This is tricky without changing HTML.
+     
+     ALTERNATIVE: Keep .video-sidebar as a container, but Flex-Column it?
+  */
+
+  .chat-layout {
+    position: fixed;
+    top: 56px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #f0f2f5;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+    gap: 0;
+  }
+
+  .chat-main {
+    order: 2;
+    flex: 1;
+    /* Fills remaining space */
+    border-radius: 20px 20px 0 0;
+    /* rounded top */
+    background: white;
+    margin-top: -10px;
+    /* Overlap video slightly */
+    z-index: 10;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .video-sidebar {
+    order: 1;
+    display: flex;
+    flex-direction: row;
+    height: 220px;
+    /* Bigger video window */
+    background: #000;
+    padding: 12px;
+    gap: 12px;
+    overflow-x: auto;
+    align-items: center;
+    scroll-snap-type: x mandatory;
+  }
+
+  .video-card {
+    height: 100%;
+    aspect-ratio: 3/4;
+    /* Taller portrait-ish visible area */
+    min-width: 160px;
+    flex: 1;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    scroll-snap-align: center;
+    border-radius: 12px;
+  }
+
+  .controls-card {
+    /* Floating Control Bar */
+    position: fixed;
+    bottom: 80px;
+    left: 16px;
+    right: 16px;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 12px;
+    border-radius: 20px;
+  }
+
+  /* Adjust chat padding to not hide behind controls */
+  .messages-area {
+    padding-bottom: 60px;
+  }
+
+  .input-area {
+    /* Inside chat-main */
+    padding: 10px;
+    background: white;
+    border-top: 1px solid #eee;
+  }
+
+  .chat-input {
+    background: #f0f2f5;
+    border: none;
+    padding: 12px 16px;
+  }
+
+  .footer {
+    display: none;
+  }
+
+  /* Controls styling for floating bar */
+  .control-btn {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    height: 36px;
+  }
+}
+
+/* Global Background Polish (Add to body rule at top) */
+body {
+  background-color: #FAFAFA;
+  /* Warmer/Cleaner white */
+  background-image:
+    radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.03) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(37, 99, 235, 0.03) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+.navbar {
+  height: 56px;
+}
+
+.footer {
+  display: none;
+  /* Hide footer on mobile when chatting to save space */
+  /* Note: This hides it globally on mobile? We need to scope it better if possible or accept it. */
+  /* Ideally only hide in chat layout, but footer is outside. */
+  /* For now, just reduced padding */
+  padding: var(--spacing-md) 0;
+  font-size: 0.8rem;
+}
+
+.searching-state {
+  min-height: 50vh;
+  padding: var(--spacing-xl);
+}
+
+.searching-state h2 {
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.searching-state p {
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+
+/* Extra Small Mobile */
+@media (max-width: 375px) {
+  .hero-title {
+    font-size: 1.625rem;
+  }
+
+  .landing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .message-bubble {
+    max-width: 90%;
+  }
+
+  .btn {
+    padding: 11px 18px;
+    font-size: 0.9rem;
+  }
+}
