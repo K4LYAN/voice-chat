@@ -1,6 +1,7 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
+const Dotenv = require('dotenv-webpack');
 
 module.exports = {
     entry: './src/main.jsx',
@@ -35,6 +36,9 @@ module.exports = {
         new webpack.ProvidePlugin({
             process: 'process/browser',
             Buffer: ['buffer', 'Buffer']
+        }),
+        new Dotenv({
+            systemvars: true // Allow system env vars (for Vercel)
         })
     ],
     resolve: {
@@ -45,7 +49,6 @@ module.exports = {
         }
     },
     devServer: {
-        server: 'https',
         host: '0.0.0.0',
         allowedHosts: 'all',
         port: 5173,

@@ -9,7 +9,7 @@ import Features from './components/Features';
 // Socket.io connection to backend server
 // Socket.io connection to backend server
 // Usage: Set VITE_SERVER_URL in .env (local) or Vercel Environment Variables (prod)
-const SOCKET_URL = import.meta.env.VITE_SERVER_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
+const SOCKET_URL = process.env.VITE_SERVER_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
 console.log('🔌 Attempting to connect to:', SOCKET_URL);
 
 const socket = io(SOCKET_URL, {

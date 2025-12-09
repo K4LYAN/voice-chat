@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: voice-chat-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18.0.0
+      - key: NODE_ENV
+        value: production
+    autoDeploy: false
