@@ -24,7 +24,30 @@ const socket = io(SOCKET_URL, {
   reconnectionAttempts: 5
 });
 
-const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Portuguese', 'Russian'];
+const LANGUAGE_DATA = [
+  { code: 'English', name: 'English', native: 'English', loc: 'en' },
+  { code: 'Spanish', name: 'Spanish', native: 'Español', loc: 'es' },
+  { code: 'Hindi', name: 'Hindi', native: 'हिन्दी', loc: 'hi' },
+  { code: 'Bengali', name: 'Bengali', native: 'বাংলা', loc: 'bn' },
+  { code: 'Marathi', name: 'Marathi', native: 'मराठी', loc: 'mr' },
+  { code: 'Telugu', name: 'Telugu', native: 'తెలుగు', loc: 'te' },
+  { code: 'Tamil', name: 'Tamil', native: 'தமிழ்', loc: 'ta' },
+  { code: 'Gujarati', name: 'Gujarati', native: 'ગુજરાતી', loc: 'gu' },
+  { code: 'Kannada', name: 'Kannada', native: 'ಕನ್ನಡ', loc: 'kn' },
+  { code: 'Malayalam', name: 'Malayalam', native: 'മലയാളം', loc: 'ml' },
+  { code: 'Punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', loc: 'pa' },
+  { code: 'Odia', name: 'Odia', native: 'ଓଡ଼ିଆ', loc: 'or' },
+  { code: 'Assamese', name: 'Assamese', native: 'অসমীয়া', loc: 'as' },
+  { code: 'Urdu', name: 'Urdu', native: 'اردو', loc: 'ur' },
+  { code: 'French', name: 'French', native: 'Français', loc: 'fr' },
+  { code: 'German', name: 'German', native: 'Deutsch', loc: 'de' },
+  { code: 'Portuguese', name: 'Portuguese', native: 'Português', loc: 'pt' },
+  { code: 'Russian', name: 'Russian', native: 'Русский', loc: 'ru' },
+  { code: 'Japanese', name: 'Japanese', native: '日本語', loc: 'ja' },
+  { code: 'Chinese', name: 'Chinese', native: '中文', loc: 'zh' },
+  { code: 'Arabic', name: 'Arabic', native: 'العربية', loc: 'ar' },
+  { code: 'Indonesian', name: 'Indonesian', native: 'Bahasa', loc: 'id' },
+];
 
 function App() {
   // State
@@ -37,10 +60,30 @@ function App() {
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
+  // New Feature State
+  const [selectedFilters, setSelectedFilters] = useState([]);
+  const [detectedLang, setDetectedLang] = useState(null);
+
   // Refs
   const myVideoRef = useRef();
   const partnerVideoRef = useRef();
   const connectionRef = useRef();
+
+  // Auto-detect language
+  useEffect(() => {
+    const browserLang = navigator.language || navigator.userLanguage;
+    const shortLang = browserLang.split('-')[0];
+    const found = LANGUAGE_DATA.find(l => l.loc === shortLang);
+
+    if (found) {
+      setDetectedLang(found.code);
+      setSelectedFilters(prev => {
+        // Only auto-select if empty (first load)
+        if (prev.length === 0) return [found.code];
+        return prev;
+      });
+    }
+  }, []);
 
   // Socket setup
   useEffect(() => {
@@ -176,6 +219,35 @@ function App() {
     }
   };
 
+  const toggleFilter = useCallback((lang) => {
+    setSelectedFilters(prev => {
+      if (prev.includes(lang)) return prev.filter(l => l !== lang);
+      return [...prev, lang];
+    });
+  }, []);
+
+  const handleQuickStart = useCallback(() => {
+    let targetLang;
+    if (selectedFilters.length > 0) {
+      // Language-aware random: Pick one of the selected languages
+      const randomIndex = Math.floor(Math.random() * selectedFilters.length);
+      targetLang = selectedFilters[randomIndex];
+    } else {
+      // Global random: Pick any supported language
+      const randomIndex = Math.floor(Math.random() * LANGUAGE_DATA.length);
+      targetLang = LANGUAGE_DATA[randomIndex].code;
+    }
+    joinQueue(targetLang);
+  }, [joinQueue, selectedFilters]);
+
+  const handleGlobalSearch = useCallback(() => {
+    // Global random: Pick any supported language
+    const randomIndex = Math.floor(Math.random() * LANGUAGE_DATA.length);
+    joinQueue(LANGUAGE_DATA[randomIndex].code);
+  }, [joinQueue]);
+
+  // ... (joinQueue etc remain) ...
+
   const joinQueue = useCallback((lang) => {
     setLanguage(lang);
     setStep('SEARCHING');
@@ -229,8 +301,10 @@ function App() {
         {step === 'LANDING' && (
           <LandingView
             key="landing"
-            languages={LANGUAGES}
-            onJoinQueue={joinQueue}
+            languages={LANGUAGE_DATA}
+            selectedFilters={selectedFilters}
+            onToggleFilter={toggleFilter}
+            onQuickStart={handleQuickStart}
             isConnected={isConnected}
           />
         )}
@@ -240,6 +314,7 @@ function App() {
             key="searching"
             language={language}
             onCancel={leaveQueue}
+            onSearchGlobal={handleGlobalSearch}
           />
         )}
 

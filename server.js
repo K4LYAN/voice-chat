@@ -293,7 +293,12 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                     if (!language || typeof language !== 'string') return;
 
                     const normalizedLang = language.toLowerCase();
-                    const ALLOWED_LANGUAGES = ['english', 'spanish', 'french', 'german', 'portuguese', 'russian'];
+                    const ALLOWED_LANGUAGES = [
+                        'english', 'spanish', 'french', 'german', 'portuguese', 'russian',
+                        'hindi', 'bengali', 'marathi', 'telugu', 'tamil', 'urdu',
+                        'japanese', 'chinese', 'arabic', 'indonesian',
+                        'gujarati', 'kannada', 'malayalam', 'punjabi', 'odia', 'assamese'
+                    ];
 
                     // A03: Injection Prevention - Strict Allowlist
                     if (!ALLOWED_LANGUAGES.includes(normalizedLang)) {
