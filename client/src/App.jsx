@@ -9,7 +9,18 @@ import Features from './components/Features';
 // Socket.io connection to backend server
 // Socket.io connection to backend server
 // Usage: Set VITE_SERVER_URL in .env (local) or Vercel Environment Variables (prod)
-const SOCKET_URL = process.env.VITE_SERVER_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
+// Fallback: If no env var, check if localhost (use :5000), else use Render URL
+const getSocketUrl = () => {
+  if (process.env.VITE_SERVER_URL) return process.env.VITE_SERVER_URL;
+
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+
+  return 'https://voice-chat-0dnh.onrender.com';
+};
+
+const SOCKET_URL = getSocketUrl();
 console.log('🔌 Attempting to connect to:', SOCKET_URL);
 
 const socket = io(SOCKET_URL, {
