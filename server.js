@@ -39,6 +39,7 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     // Security Middleware
     // Security Middleware
     // Content Security Policy (A05: Security Misconfiguration)
+    app.enable('trust proxy'); // Required for correct IP/Rate-limit behind Load Balancers (Heroku/Render/AWS)
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -55,7 +56,7 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     // Rate Limiting
     const limiter = rateLimit({
         windowMs: 15 * 60 * 1000, // 15 minutes
-        max: 1000, // Scalability: Increased for NAT/Proxy users
+        max: 5000, // Scalability: Increased for 10k users (many might share NAT/IP)
         standardHeaders: true,
         legacyHeaders: false,
     });
@@ -331,14 +332,6 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                             continue;
                         }
 
-                        // Check if peer is still connected to socket.io (latency check)
-                        const sockets = await io.in(peerSocketId).fetchSockets();
-                        if (sockets.length === 0) {
-                            console.log(`Peer ${peerSocketId} socket disconnected, skipping`);
-                            await sessionOps.delete(peerSocketId); // Cleanup
-                            continue;
-                        }
-
                         // Found valid peer
                         matchFound = true;
                         const roomId = `${peerSocketId}#${socket.id}`;
@@ -446,5 +439,3 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     // Start everything
     startServer();
 }
-
-
