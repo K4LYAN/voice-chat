@@ -6,18 +6,18 @@ const containerVariants = {
     visible: {
         opacity: 1,
         transition: {
-            staggerChildren: 0.03,
+            staggerChildren: 0.05,
             delayChildren: 0.1
         }
     }
 };
 
 const itemVariants = {
-    hidden: { opacity: 0, scale: 0.8 },
+    hidden: { opacity: 0, y: 10 },
     visible: {
         opacity: 1,
-        scale: 1,
-        transition: { type: "spring", stiffness: 300, damping: 24 }
+        y: 0,
+        transition: { type: "tween", duration: 0.3 }
     }
 };
 
@@ -25,127 +25,166 @@ const LandingView = ({ languages, selectedFilters, onToggleFilter, onQuickStart,
     const [searchTerm, setSearchTerm] = React.useState('');
 
     return (
-        <motion.main
-            className="hero-section"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.4 }}
-        >
-            <motion.h1
-                className="hero-title"
-                layout
+        <div className="landing-page-wrapper">
+            <motion.section
+                className="hero-section"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
             >
-                Global Connection.
-            </motion.h1>
+                <h1 className="hero-title">
+                    Global Connection.
+                </h1>
 
-            <motion.p className="hero-subtitle" layout>
-                Connect with people who prefer your languages. Tap Quick Start to begin.
-            </motion.p>
+                <p className="hero-subtitle">
+                    Connect instantly with people who speak your language. Simple, fast, and free.
+                </p>
 
-            {/* Quick Start CTA */}
-            <motion.button
-                className="btn-quick-start"
-                onClick={onQuickStart}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                layout
-                title="Connect instantly with people who speak your language"
-            >
-                <span style={{ fontSize: '1.4rem' }}>⚡</span>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                    <span>{selectedFilters.length > 0 ? 'Quick Match' : 'Global Quick Start'}</span>
-                    {selectedFilters.length > 0 && (
-                        <span style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: 400 }}>
-                            Searching in {selectedFilters.slice(0, 2).join(', ')} {selectedFilters.length > 2 ? `+${selectedFilters.length - 2}` : ''}
-                        </span>
-                    )}
-                </div>
-            </motion.button>
-
-            {/* Active Filter Banner */}
-            {selectedFilters.length > 0 && (
-                <motion.div
-                    className="filter-banner"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                {/* Quick Start CTA */}
+                <motion.button
+                    className="btn-quick-start"
+                    onClick={onQuickStart}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                 >
-                    <span className="filter-label">Active Filters:</span>
-                    <div className="filter-pills">
+                    <div className="btn-icon">⚡</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                        <span style={{ fontSize: '1rem', fontWeight: 600 }}>{selectedFilters.length > 0 ? 'Start Matching' : 'Global Quick Start'}</span>
+                    </div>
+                </motion.button>
+
+                {/* Active Filter Banner */}
+                {selectedFilters.length > 0 && (
+                    <div className="filter-banner">
                         {selectedFilters.map(filter => (
                             <motion.span key={filter} layoutId={`pill-${filter}`} className="filter-pill">
                                 {filter}
                                 <button className="pill-remove" onClick={(e) => { e.stopPropagation(); onToggleFilter(filter); }}>×</button>
                             </motion.span>
                         ))}
-                        <button className="pill-clear" onClick={() => selectedFilters.forEach(f => onToggleFilter(f))}>Clear</button>
+                        <button className="pill-clear" onClick={() => selectedFilters.forEach(f => onToggleFilter(f))}>Clear All</button>
                     </div>
-                </motion.div>
-            )}
+                )}
 
-            <div className="filter-section">
-                <div className="filter-header-row">
-                    <span className="filter-header">Select Regional Languages</span>
-                    <div className="search-wrapper">
-                        <span className="search-icon">🔍</span>
-                        <input
-                            type="text"
-                            className="lang-search-input"
-                            placeholder="Search languages..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                <div className="filter-section">
+                    <div className="filter-header-row">
+                        <span className="filter-header">Select Language</span>
+                        <div className="search-wrapper">
+                            <span className="search-icon" style={{ opacity: 0.5, fontSize: '0.9rem' }}>🔍</span>
+                            <input
+                                type="text"
+                                className="lang-search-input"
+                                placeholder="Find..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <motion.div
+                        className="language-grid"
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        key={searchTerm}
+                    >
+                        {languages
+                            .filter(lang =>
+                                lang.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                lang.native.toLowerCase().includes(searchTerm.toLowerCase())
+                            )
+                            .map(lang => {
+                                const isSelected = selectedFilters.includes(lang.code);
+
+                                return (
+                                    <motion.button
+                                        key={lang.code}
+                                        className={`lang-card ${isSelected ? 'selected' : ''}`}
+                                        onClick={() => onToggleFilter(lang.code)}
+                                        variants={itemVariants}
+                                        whileHover={{ y: -2 }}
+                                        whileTap={{ y: 0 }}
+                                    >
+                                        <div className="lang-info">
+                                            <span className="lang-name">{lang.name}</span>
+                                            <span className="lang-native">{lang.native}</span>
+                                        </div>
+                                        {isSelected && (
+                                            <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                className="check-icon"
+                                            >
+                                                ✓
+                                            </motion.div>
+                                        )}
+                                    </motion.button>
+                                );
+                            })}
+                    </motion.div>
+                </div>
+            </motion.section>
+
+            {/* How It Works Section */}
+            <section className="section-container how-it-works">
+                <h2 className="section-title">How It Works</h2>
+                <div className="steps-grid">
+                    <div className="step-card">
+                        <div className="step-number">01</div>
+                        <h3>Select Language</h3>
+                        <p>Choose your preferred language or region to find matching partners.</p>
+                    </div>
+                    <div className="step-card">
+                        <div className="step-number">02</div>
+                        <h3>Instant Match</h3>
+                        <p>Our algorithm connects you with available users in seconds.</p>
+                    </div>
+                    <div className="step-card">
+                        <div className="step-number">03</div>
+                        <h3>Start Chatting</h3>
+                        <p>Connect via high-quality video and audio. No sign-up required.</p>
                     </div>
                 </div>
+            </section>
 
-                <motion.div
-                    className="language-grid"
-                    variants={containerVariants}
-                    initial="hidden"
-                    animate="visible"
-                    key={searchTerm} // Re-animate on search
-                >
-                    {languages
-                        .filter(lang =>
-                            lang.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            lang.native.toLowerCase().includes(searchTerm.toLowerCase())
-                        )
-                        .map(lang => {
-                            const isSelected = selectedFilters.includes(lang.code);
-                            const isDetected = detectedLang === lang.code;
+            {/* Features Section */}
+            <section className="section-container features-section">
+                <div className="feature-content">
+                    <h2 className="section-title">Why VoiceChat?</h2>
+                    <div className="features-grid">
+                        <div className="feature-item">
+                            <span className="feature-icon">🔒</span>
+                            <h3>Anonymous & Safe</h3>
+                            <p>We don't store your data. Chats are peer-to-peer and private.</p>
+                        </div>
+                        <div className="feature-item">
+                            <span className="feature-icon">🌍</span>
+                            <h3>Global Reach</h3>
+                            <p>Connect with people from over 100 countries instantly.</p>
+                        </div>
+                        <div className="feature-item">
+                            <span className="feature-icon">⚡</span>
+                            <h3>Lightning Fast</h3>
+                            <p>Optimized for low-latency video even on slow networks.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
-                            return (
-                                <motion.button
-                                    key={lang.code}
-                                    className={`lang-card ${isSelected ? 'selected' : ''}`}
-                                    onClick={() => onToggleFilter(lang.code)}
-                                    variants={itemVariants}
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    layout
-                                    aria-label={`Select ${lang.name}`}
-                                    aria-pressed={isSelected}
-                                >
-                                    <div className="lang-info">
-                                        <span className="lang-name">{lang.name}</span>
-                                        <span className="lang-native">{lang.native}</span>
-                                    </div>
-                                    <div className="lang-status">
-                                        {isDetected && <span className="badge-detected">Detected</span>}
-                                        {isSelected && <motion.span layoutId={`check-${lang.code}`} className="check-icon">✓</motion.span>}
-                                    </div>
-                                </motion.button>
-                            );
-                        })}
-                </motion.div>
-
-                {languages.filter(l => l.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.7 }} className="no-results">
-                        No languages found matching "{searchTerm}"
-                    </motion.div>
-                )}
-            </div>
-        </motion.main>
+            {/* Simple Footer */}
+            <footer className="site-footer">
+                <div className="footer-content">
+                    <div className="footer-brand">VoiceChat</div>
+                    <div className="footer-links">
+                        <span>Terms</span>
+                        <span>Privacy</span>
+                        <span>Contact</span>
+                    </div>
+                    <div className="footer-copyright">© 2024 VoiceChat Inc.</div>
+                </div>
+            </footer>
+        </div>
     );
 };
 

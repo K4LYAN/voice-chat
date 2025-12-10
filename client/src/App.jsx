@@ -56,6 +56,7 @@ function App() {
   const [roomId, setRoomId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // New Feature State
   const [selectedFilters, setSelectedFilters] = useState([]);
@@ -109,8 +110,14 @@ function App() {
     });
 
     socket.on('partner-disconnected', () => {
-      alert('Partner disconnected');
-      endCall();
+      // Automatically search for next partner instead of ending
+      setMessages([]); // Clear previous chat
+      setRoomId(null);
+      endCallRTC(true); // Keep media active
+
+      // Rejoin queue with same language
+      setStep('SEARCHING');
+      socket.emit('join-queue', { language });
     });
 
     socket.on('receive-message', ({ message, sender }) => {
@@ -124,7 +131,7 @@ function App() {
       socket.off('partner-disconnected');
       socket.off('receive-message');
     };
-  }, [endCall, initializePeer]);
+  }, [endCall, initializePeer, language, endCallRTC]);
 
 
   const toggleFilter = useCallback((lang) => {
@@ -177,14 +184,46 @@ function App() {
     <div className="app-container">
       {/* Navbar */}
       <nav className="navbar">
-        <div className="brand">
-          <div className="brand-dot"></div>
-          <span>Antigravity</span>
+        <a href="/" className="brand">
+          <div className="brand-icon">V</div>
+          VoiceChat
+        </a>
+
+        {/* Desktop Links */}
+        <div className="nav-links desktop-only">
+          <a href="#" className="nav-link">Community</a>
+          <a href="#" className="nav-link">Safety</a>
+          <a href="#" className="nav-link">Support</a>
         </div>
-        <div className="status-indicator">
-          <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
-          {isConnected ? 'System Normal' : 'Reconnecting...'}
+
+        <div className="nav-right">
+          <div className="status-indicator desktop-only">
+            <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
+            {isConnected ? 'Online' : 'Reconnecting...'}
+          </div>
+
+          {/* Mobile Menu Toggle */}
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? '✕' : '☰'}
+          </button>
         </div>
+
+        {/* Mobile Menu Dropdown */}
+        {isMobileMenuOpen && (
+          <div className="mobile-menu">
+            <a href="#" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Community</a>
+            <a href="#" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Safety</a>
+            <a href="#" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Support</a>
+            <div className="mobile-status">
+              <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
+              {isConnected ? 'Online' : 'Reconnecting...'}
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Main Content Area */}

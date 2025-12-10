@@ -4,10 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Memoized Message Bubble to prevent re-rendering old messages
 const MessageBubble = React.memo(({ message, isMe }) => (
     <motion.div
-        layout
-        initial={{ opacity: 0, y: 10, scale: 0.9 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
         className={`message-row ${isMe ? 'me' : 'partner'}`}
     >
         <div className={`message-bubble ${isMe ? 'me' : 'partner'}`}>
@@ -32,10 +30,40 @@ const ChatSession = ({
 
     // Attach partner video stream when it becomes available
     useEffect(() => {
-        if (partnerVideoRef.current && partnerStream) {
-            partnerVideoRef.current.srcObject = partnerStream;
-            partnerVideoRef.current.play().catch(e => console.error("Autoplay failed:", e));
+        const video = partnerVideoRef.current;
+
+        if (video && partnerStream) {
+            // Set the stream
+            video.srcObject = partnerStream;
+
+            // Wait for video to be ready before playing
+            const playVideo = async () => {
+                try {
+                    // Small delay to ensure video is ready
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Check if video is still mounted and has stream
+                    if (video.srcObject === partnerStream) {
+                        await video.play();
+                    }
+                } catch (error) {
+                    // Silently handle autoplay errors - they're expected in some browsers
+                    if (error.name !== 'AbortError') {
+                        console.warn('Video autoplay issue:', error.message);
+                    }
+                }
+            };
+
+            playVideo();
         }
+
+        // Cleanup function to prevent interrupted play requests
+        return () => {
+            if (video && video.srcObject) {
+                video.pause();
+                video.srcObject = null;
+            }
+        };
     }, [partnerStream, partnerVideoRef]);
 
     // Auto-scroll on new messages
@@ -56,13 +84,49 @@ const ChatSession = ({
     return (
         <motion.div
             className="session-layout"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.4 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
         >
-            {/* Chat Container */}
-            <div className="chat-container">
+            {/* Video Section */}
+            <div className="video-section">
+                <div className="video-full">
+                    <video ref={partnerVideoRef} autoPlay playsInline />
+                </div>
+
+                {/* Simplified Controls - Skip & End Call Only */}
+                <div className="session-controls">
+                    <button
+                        className="btn-control"
+                        onClick={nextPartner}
+                        title="Skip / Next Partner"
+                        aria-label="Next Partner"
+                    >
+                        ⏭️
+                    </button>
+                    <button
+                        className="btn-control danger"
+                        onClick={() => endCall(false)}
+                        title="End Call"
+                        aria-label="End Call"
+                    >
+                        📞
+                    </button>
+                </div>
+
+                {/* PiP Self View */}
+                <motion.div
+                    className="video-pip"
+                    drag
+                    dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                >
+                    <video ref={myVideoRef} autoPlay playsInline muted />
+                </motion.div>
+            </div>
+
+            {/* Chat Sheet */}
+            <div className="chat-sheet">
                 <div className="chat-messages">
                     <AnimatePresence initial={false}>
                         {messages.map((m, i) => (
@@ -78,70 +142,19 @@ const ChatSession = ({
                         value={inputMsg}
                         onChange={e => setInputMsg(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Type a message..."
+                        placeholder="Type something here..."
                         autoFocus
                     />
                     <motion.button
-                        className="btn btn-primary"
-                        style={{ width: 'auto', padding: '0 24px' }}
+                        className="btn-send-round"
                         onClick={handleSend}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                        whileTap={{ scale: 0.9 }}
+                        aria-label="Send Message"
                     >
-                        Send
+                        ➤
                     </motion.button>
                 </div>
             </div>
-
-            {/* Sidebar / Controls */}
-            <aside className="sidebar">
-                <div className="video-container">
-                    <motion.div
-                        className="video-frame"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                    >
-                        <video ref={partnerVideoRef} autoPlay playsInline />
-                        <div className="video-label">{partnerStream ? 'Partner' : 'Partner (Connecting...)'}</div>
-                    </motion.div>
-                    <motion.div
-                        className="video-frame"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                    >
-                        <video ref={myVideoRef} autoPlay playsInline muted />
-                        <div className="video-label">You</div>
-                    </motion.div>
-                </div>
-
-                <div className="controls-panel">
-                    <motion.button
-                        className={`btn ${isVoiceMode ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={toggleVoiceMode}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                        {isVoiceMode ? 'Stop Voice' : 'Start Voice'}
-                    </motion.button>
-
-                    <motion.button
-                        className="btn btn-surface"
-                        onClick={nextPartner}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                        Find Next Match
-                    </motion.button>
-
-                    <motion.button
-                        className="btn btn-danger"
-                        onClick={() => endCall(false)}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                        End Session
-                    </motion.button>
-                </div>
-            </aside>
         </motion.div>
     );
 };
