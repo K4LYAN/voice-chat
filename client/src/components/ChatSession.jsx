@@ -30,6 +30,13 @@ const ChatSession = ({
     const [inputMsg, setInputMsg] = useState('');
     const messagesEndRef = useRef(null);
 
+    // Attach partner video stream when it becomes available
+    useEffect(() => {
+        if (partnerVideoRef.current && partnerStream) {
+            partnerVideoRef.current.srcObject = partnerStream;
+        }
+    }, [partnerStream, partnerVideoRef]);
+
     // Auto-scroll on new messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
