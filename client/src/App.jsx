@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import io from 'socket.io-client';
-import SimplePeer from 'simple-peer';
 import './App.css';
 import LandingView from './components/LandingView';
 import SearchingView from './components/SearchingView';
 import ChatSession from './components/ChatSession';
+import { useWebRTC } from './hooks/useWebRTC';
 
 // Socket.io connection setup
 const getSocketUrl = () => {
@@ -55,19 +55,23 @@ function App() {
   const [language, setLanguage] = useState('');
   const [roomId, setRoomId] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [myStream, setMyStream] = useState(null);
-  const [partnerStream, setPartnerStream] = useState(null);
-  const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
   // New Feature State
   const [selectedFilters, setSelectedFilters] = useState([]);
-  const [detectedLang, setDetectedLang] = useState(null);
+  const [detectedLang, setDetectedLang] = useState(null); // Keep detectedLang logic 
 
-  // Refs
-  const myVideoRef = useRef();
-  const partnerVideoRef = useRef();
-  const connectionRef = useRef();
+  // Use Custom WebRTC Hook
+  const {
+    myStream,
+    partnerStream,
+    myVideoRef,
+    partnerVideoRef,
+    isVoiceMode,
+    initializePeer,
+    endCall: endCallRTC,
+    toggleVoiceMode
+  } = useWebRTC(socket);
 
   // Auto-detect language
   useEffect(() => {
@@ -85,38 +89,28 @@ function App() {
     }
   }, []);
 
-  // Socket setup
+  const endCall = useCallback((keepMedia = false) => {
+    setStep('LANDING');
+    setRoomId(null);
+    setMessages([]);
+    endCallRTC(keepMedia); // Delegated to hook
+    socket.emit('leave-room');
+  }, [endCallRTC]);
+
+  // Socket setup (Only for app-level events)
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
 
-    socket.on('match-found', ({ roomId: assignedRoomId, initiator }) => {
+    socket.on('match-found', ({ roomId: assignedRoomId, initiator, partnerId }) => {
       setRoomId(assignedRoomId);
       setStep('CHATTING');
-      initializePeer(initiator === socket.id, assignedRoomId);
+      initializePeer(initiator === socket.id, partnerId);
     });
 
     socket.on('partner-disconnected', () => {
       alert('Partner disconnected');
       endCall();
-    });
-
-    socket.on('offer', (payload) => {
-      if (payload.caller !== socket.id && connectionRef.current) {
-        connectionRef.current.signal(payload.sdp);
-      }
-    });
-
-    socket.on('answer', (payload) => {
-      if (payload.caller !== socket.id && connectionRef.current) {
-        connectionRef.current.signal(payload.sdp);
-      }
-    });
-
-    socket.on('ice-candidate', (payload) => {
-      if (connectionRef.current) {
-        connectionRef.current.signal(payload.candidate);
-      }
     });
 
     socket.on('receive-message', ({ message, sender }) => {
@@ -128,102 +122,10 @@ function App() {
       socket.off('disconnect');
       socket.off('match-found');
       socket.off('partner-disconnected');
-      socket.off('offer');
-      socket.off('answer');
-      socket.off('ice-candidate');
       socket.off('receive-message');
     };
-  }, []);
+  }, [endCall, initializePeer]);
 
-  // Media handling
-  const getMedia = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      setMyStream(stream);
-      if (myVideoRef.current) myVideoRef.current.srcObject = stream;
-      return stream;
-    } catch (err) {
-      console.error('Error accessing media:', err);
-      alert('Could not access Camera/Microphone. Please allow permissions.');
-      return null;
-    }
-  };
-
-  const stopMedia = () => {
-    if (myStream) {
-      myStream.getTracks().forEach(track => track.stop());
-      setMyStream(null);
-    }
-  };
-
-  // WebRTC
-  const initializePeer = async (initiator, currentRoomId) => {
-    try {
-      // Always get media stream when peer connection is established
-      let stream = myStream;
-      if (!stream) {
-        stream = await getMedia();
-        if (!stream) {
-          alert('Cannot establish connection without media access');
-          return;
-        }
-        // Auto-enable voice mode when match is found
-        setIsVoiceMode(true);
-      }
-
-      const peer = new SimplePeer({
-        initiator,
-        trickle: false,
-        stream: stream
-      });
-
-      peer.on('signal', (data) => {
-        if (data.type === 'offer') {
-          socket.emit('offer', { target: currentRoomId, sdp: data, caller: socket.id });
-        } else if (data.type === 'answer') {
-          socket.emit('answer', { target: currentRoomId, sdp: data, caller: socket.id });
-        } else if (data.candidate) {
-          socket.emit('ice-candidate', { target: currentRoomId, candidate: data });
-        }
-      });
-
-      peer.on('stream', (stream) => {
-        setPartnerStream(stream);
-        if (partnerVideoRef.current) partnerVideoRef.current.srcObject = stream;
-      });
-
-      peer.on('close', () => {
-        connectionRef.current = null;
-      });
-
-      connectionRef.current = peer;
-    } catch (error) {
-      console.error('Peer init error:', error);
-    }
-  };
-
-  const toggleVoiceMode = async () => {
-    const newMode = !isVoiceMode;
-    if (newMode) {
-      const stream = await getMedia();
-      if (stream) {
-        setIsVoiceMode(true);
-        if (connectionRef.current && !connectionRef.current.destroyed) {
-          connectionRef.current.addStream(stream);
-        }
-      }
-    } else {
-      setIsVoiceMode(false);
-      stopMedia();
-      if (connectionRef.current && !connectionRef.current.destroyed && myStream) {
-        try {
-          connectionRef.current.removeStream(myStream);
-        } catch (e) {
-          console.warn(e);
-        }
-      }
-    }
-  };
 
   const toggleFilter = useCallback((lang) => {
     setSelectedFilters(prev => {
@@ -235,24 +137,20 @@ function App() {
   const handleQuickStart = useCallback(() => {
     let targetLang;
     if (selectedFilters.length > 0) {
-      // Language-aware random: Pick one of the selected languages
       const randomIndex = Math.floor(Math.random() * selectedFilters.length);
       targetLang = selectedFilters[randomIndex];
     } else {
-      // Global random: Pick any supported language
       const randomIndex = Math.floor(Math.random() * LANGUAGE_DATA.length);
       targetLang = LANGUAGE_DATA[randomIndex].code;
     }
     joinQueue(targetLang);
-  }, [joinQueue, selectedFilters]);
+  }, [selectedFilters]); // joinQueue is defined below, wait. cyclic dep?
+  // joinQueue depends on socket, safe.
 
   const handleGlobalSearch = useCallback(() => {
-    // Global random: Pick any supported language
     const randomIndex = Math.floor(Math.random() * LANGUAGE_DATA.length);
     joinQueue(LANGUAGE_DATA[randomIndex].code);
-  }, [joinQueue]);
-
-  // ... (joinQueue etc remain) ...
+  }, []);
 
   const joinQueue = useCallback((lang) => {
     setLanguage(lang);
@@ -265,21 +163,8 @@ function App() {
     setMessages(prev => [...prev, { text: text, sender: 'me' }]);
   }, [roomId]);
 
-  const endCall = useCallback((keepMedia = false) => {
-    setStep('LANDING');
-    setRoomId(null);
-    setMessages([]);
-    setPartnerStream(null);
-    if (!keepMedia) stopMedia();
-    if (connectionRef.current) {
-      connectionRef.current.destroy();
-      connectionRef.current = null;
-    }
-    socket.emit('leave-room');
-  }, []);
-
   const nextPartner = useCallback(() => {
-    endCall(true);
+    endCall(true); // Keep media for next call
     joinQueue(language);
   }, [endCall, joinQueue, language]);
 

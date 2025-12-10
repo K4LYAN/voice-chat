@@ -34,6 +34,7 @@ const ChatSession = ({
     useEffect(() => {
         if (partnerVideoRef.current && partnerStream) {
             partnerVideoRef.current.srcObject = partnerStream;
+            partnerVideoRef.current.play().catch(e => console.error("Autoplay failed:", e));
         }
     }, [partnerStream, partnerVideoRef]);
 
@@ -92,7 +93,7 @@ const ChatSession = ({
                 </div>
             </div>
 
-            {/* Sidebar / Controls - Memoized via Parent if needed, or largely static */}
+            {/* Sidebar / Controls */}
             <aside className="sidebar">
                 <div className="video-container">
                     <motion.div
@@ -101,7 +102,7 @@ const ChatSession = ({
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.2 }}
                     >
-                        <video ref={partnerVideoRef} autoPlay playsInline muted={false} />
+                        <video ref={partnerVideoRef} autoPlay playsInline />
                         <div className="video-label">{partnerStream ? 'Partner' : 'Partner (Connecting...)'}</div>
                     </motion.div>
                     <motion.div

@@ -468,11 +468,13 @@ p {
 /* Active Session Layout */
 .session-layout {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: var(--spacing-md);
+  grid-template-columns: 1fr 360px;
+  /* Slightly wider side panel */
+  gap: var(--spacing-lg);
   flex: 1;
   overflow: hidden;
   padding-bottom: var(--spacing-md);
+  max-width: 100%;
 }
 
 /* Chat Area */
@@ -585,6 +587,7 @@ p {
   justify-content: center;
   transform: translateZ(0);
   /* Force layer creation */
+  aspect-ratio: 16/9;
 }
 
 .video-frame video {
@@ -729,14 +732,21 @@ p {
 
   .video-container {
     order: -1;
-    /* Top */
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto;
-    height: 160px;
-    /* Fixed height strip for videos */
+    gap: var(--spacing-sm);
+    height: auto;
+    /* Allow height to adapt */
+    max-height: 25vh;
+    /* Limit height usage */
     flex: none;
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .video-frame {
+    aspect-ratio: 16/9;
+    /* Enforce ratio */
+    height: 100%;
   }
 
   .chat-container {

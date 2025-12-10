@@ -351,8 +351,8 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                         // With io.in(peerSocketId).socketsJoin(roomId), it works across nodes if adapter is set
                         io.in(peerSocketId).socketsJoin(roomId);
 
-                        io.to(socket.id).emit('match-found', { roomId, initiator: socket.id });
-                        io.to(peerSocketId).emit('match-found', { roomId, initiator: socket.id });
+                        io.to(socket.id).emit('match-found', { roomId, initiator: socket.id, partnerId: peerSocketId });
+                        io.to(peerSocketId).emit('match-found', { roomId, initiator: socket.id, partnerId: socket.id });
 
                         console.log(`Match made: ${socket.id} & ${peerSocketId} in room ${roomId}`);
                     }
