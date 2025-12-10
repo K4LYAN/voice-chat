@@ -21,6 +21,7 @@ const getSocketUrl = () => {
 };
 
 const SOCKET_URL = getSocketUrl();
+console.log('🔍 DEBUG: Client Version: FLASH-FIX-V1');
 console.log('🔌 Attempting to connect to:', SOCKET_URL);
 
 const socket = io(SOCKET_URL, {
