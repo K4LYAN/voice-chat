@@ -159,16 +159,22 @@ function App() {
   // WebRTC
   const initializePeer = async (initiator, currentRoomId) => {
     try {
+      // Always get media stream when peer connection is established
       let stream = myStream;
-      if (isVoiceMode && !stream) {
+      if (!stream) {
         stream = await getMedia();
-        if (!stream) return;
+        if (!stream) {
+          alert('Cannot establish connection without media access');
+          return;
+        }
+        // Auto-enable voice mode when match is found
+        setIsVoiceMode(true);
       }
 
       const peer = new SimplePeer({
         initiator,
         trickle: false,
-        stream: stream || undefined
+        stream: stream
       });
 
       peer.on('signal', (data) => {
