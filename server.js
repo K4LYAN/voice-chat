@@ -103,262 +103,341 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
         transports: ['websocket', 'polling']
     });
 
-    // Redis setup
+    // Redis setup & Fallback
     let redisConfig;
-    if (process.env.REDIS_URL) {
-        redisConfig = { url: process.env.REDIS_URL };
-    } else if (process.env.REDIS_HOST) {
-        redisConfig = {
-            username: process.env.REDIS_USERNAME || 'default',
-            password: process.env.REDIS_PASSWORD,
-            socket: {
-                host: process.env.REDIS_HOST,
-                port: process.env.REDIS_PORT || 6379
-            }
-        };
-    } else {
-        console.warn('WARNING: No Redis configuration found! Using hardcoded fallback (Not recommended for production)');
-        redisConfig = {
-            username: 'default',
-            password: 'FkUVcI6GC38d3ZfsaybgMK9tqiGW8ze6',
-            socket: {
-                host: 'redis-19021.c266.us-east-1-3.ec2.cloud.redislabs.com',
-                port: 19021
-            }
-        };
+    let pubClient, subClient, dbClient;
+    let useRedis = false;
+
+    // In-Memory Storage Implementation (Fallback)
+    class InMemoryStore {
+        constructor() {
+            this.store = new Map();
+            this.hasExpiry = new Set();
+        }
+
+        async connect() { return true; }
+
+        async set(key, value) { this.store.set(key, value); }
+        async get(key) { return this.store.get(key); }
+
+        // ZSET (Queue) Mock
+        async zAdd(key, { score, value }) {
+            if (!this.store.has(key)) this.store.set(key, []);
+            const list = this.store.get(key);
+            // Remove existing if any
+            const idx = list.findIndex(i => i.value === value);
+            if (idx !== -1) list.splice(idx, 1);
+
+            list.push({ score, value });
+            list.sort((a, b) => a.score - b.score);
+        }
+
+        async zPopMin(key) {
+            if (!this.store.has(key)) return null;
+            const list = this.store.get(key);
+            if (list.length === 0) return null;
+            return list.shift(); // Remove and return first (lowest score)
+        }
+
+        async zRem(key, value) {
+            if (!this.store.has(key)) return;
+            const list = this.store.get(key);
+            const idx = list.findIndex(i => i.value === value);
+            if (idx !== -1) list.splice(idx, 1);
+        }
+
+        // HSET (Session) Mock
+        async hSet(key, object) {
+            this.store.set(key, { ...object });
+        }
+
+        async hGetAll(key) {
+            return this.store.get(key) || null;
+        }
+
+        async expire(key, seconds) {
+            // Basic mock: just delete after timeout
+            // In a real app we might track this proper, but for simple fallback calls this is fine
+            // or we ignore it for short sessions.
+            // Let's implement a simple timeout
+            setTimeout(() => this.store.delete(key), seconds * 1000);
+        }
+
+        async del(key) {
+            this.store.delete(key);
+        }
+
+        on(event, cb) { } // Mock event listener
     }
 
-    // Create clients
-    const pubClient = createClient(redisConfig);
-    const subClient = pubClient.duplicate();
-    const dbClient = createClient(redisConfig);
-
-    (async () => {
+    const startServer = async () => {
+        // Try to connect to Redis
         try {
-            await Promise.all([pubClient.connect(), subClient.connect(), dbClient.connect()]);
-            io.adapter(createAdapter(pubClient, subClient));
-            console.log('Connected to Redis and set up Socket.io Adapter');
-
-            // Verification Check (User Request)
-            await dbClient.set('foo', 'bar');
-            const result = await dbClient.get('foo');
-            console.log('Redis Verification Result (foo):', result); // >>> bar
-
-        } catch (e) {
-            console.error('Redis connection failed:', e);
-            process.exit(1); // Cannot run scalable mode without Redis
-        }
-    })();
-
-    dbClient.on('error', (err) => console.log('Redis DB Client Error', err));
-
-    // Helper to get queue key
-    const getQueueKey = (lang) => `queue:${lang}`;
-    const getSessionKey = (socketId) => `session:${socketId}`;
-
-    // Queue Abstraction - Redis ZSET (O(log N))
-    const queueOps = {
-        push: async (lang, socketId) => {
-            // Score = timestamp (FIFO behavior naturally)
-            await dbClient.zAdd(getQueueKey(lang), { score: Date.now(), value: socketId });
-        },
-        pop: async (lang) => {
-            // Pop element with lowest score (oldest)
-            const result = await dbClient.zPopMin(getQueueKey(lang));
-            return result ? result.value : null;
-        },
-        returnToFront: async (lang, socketId) => {
-            // Score = 0 to be popped first
-            await dbClient.zAdd(getQueueKey(lang), { score: 0, value: socketId });
-        },
-        remove: async (lang, socketId) => {
-            await dbClient.zRem(getQueueKey(lang), socketId);
-        }
-    };
-
-    // Session Abstraction - Redis Only
-    const sessionOps = {
-        set: async (socketId, data) => {
-            // Flatten object for HSET if needed, but Redis handles flat maps. 
-            // We'll store fields: roomId, language, partnerSocketId, inQueue
-            // Note: data values should be strings.
-            const flatData = {};
-            for (const [k, v] of Object.entries(data)) {
-                flatData[k] = String(v);
+            if (process.env.REDIS_URL) {
+                redisConfig = { url: process.env.REDIS_URL };
+            } else if (process.env.REDIS_HOST) {
+                redisConfig = {
+                    username: process.env.REDIS_USERNAME || 'default',
+                    password: process.env.REDIS_PASSWORD,
+                    socket: {
+                        host: process.env.REDIS_HOST,
+                        port: process.env.REDIS_PORT || 6379,
+                        // Important for Render: some free redises need TLS
+                        // But 'redis' package usually handles this via protocol in URL or defaults
+                    }
+                };
             }
-            await dbClient.hSet(getSessionKey(socketId), flatData);
-            // Set expiry to avoid stale keys if restart happens (e.g., 24h)
-            await dbClient.expire(getSessionKey(socketId), 86400);
-        },
-        get: async (socketId) => {
-            const data = await dbClient.hGetAll(getSessionKey(socketId));
-            if (!data || Object.keys(data).length === 0) return null;
-            // Convert 'true'/'false' strings back to booleans if needed
-            if (data.inQueue === 'true') data.inQueue = true;
-            if (data.inQueue === 'false') data.inQueue = false;
-            return data;
-        },
-        delete: async (socketId) => {
-            await dbClient.del(getSessionKey(socketId));
+
+            if (redisConfig) {
+                console.log('Attempting Redis connection...');
+                const tempPub = createClient(redisConfig);
+                const tempSub = tempPub.duplicate();
+                const tempDb = createClient(redisConfig);
+
+                // Add error handlers to prevent crash during connect
+                const ignoreErr = (err) => { };
+                tempPub.on('error', ignoreErr);
+                tempSub.on('error', ignoreErr);
+                tempDb.on('error', ignoreErr);
+
+                await Promise.all([tempPub.connect(), tempSub.connect(), tempDb.connect()]);
+
+                // If we get here, connection successful
+                pubClient = tempPub;
+                subClient = tempSub;
+                dbClient = tempDb;
+
+                // Restore normal error logging
+                pubClient.removeAllListeners('error');
+                subClient.removeAllListeners('error');
+                dbClient.removeAllListeners('error');
+
+                pubClient.on('error', (err) => console.error('Redis Pub Error:', err));
+                subClient.on('error', (err) => console.error('Redis Sub Error:', err));
+                dbClient.on('error', (err) => console.error('Redis DB Error:', err));
+
+                io.adapter(createAdapter(pubClient, subClient));
+                useRedis = true;
+                console.log('✅ Connected to Redis (Scalable Mode)');
+            } else {
+                throw new Error('No Redis config');
+            }
+        } catch (e) {
+            console.warn('⚠️ Redis connection failed or not configured. Falling back to In-Memory Store.');
+            console.warn('⚠️ Note: Clustering/Scaling will not share state in this mode.');
+            console.warn('Reason:', e.message);
+
+            dbClient = new InMemoryStore();
+            // No pub/sub for adapter needed if single instance, default memory adapter works for socket.io
+            useRedis = false;
         }
-    };
 
+        // --- Ops Abstractions ---
 
-    io.on('connection', (socket) => {
-        console.log('User connected:', socket.id);
+        // Helper to get queue key
+        const getQueueKey = (lang) => `queue:${lang}`;
+        const getSessionKey = (socketId) => `session:${socketId}`;
 
-        socket.on('join-queue', async ({ language }) => {
-            try {
-                if (!language || typeof language !== 'string') return;
+        const queueOps = {
+            push: async (lang, socketId) => {
+                await dbClient.zAdd(getQueueKey(lang), { score: Date.now(), value: socketId });
+            },
+            pop: async (lang) => {
+                const result = await dbClient.zPopMin(getQueueKey(lang));
+                return result ? result.value : null;
+            },
+            returnToFront: async (lang, socketId) => {
+                await dbClient.zAdd(getQueueKey(lang), { score: 0, value: socketId });
+            },
+            remove: async (lang, socketId) => {
+                await dbClient.zRem(getQueueKey(lang), socketId);
+            }
+        };
 
-                const normalizedLang = language.toLowerCase();
-                const ALLOWED_LANGUAGES = ['english', 'spanish', 'french', 'german', 'portuguese', 'russian'];
+        const sessionOps = {
+            set: async (socketId, data) => {
+                const flatData = {};
+                for (const [k, v] of Object.entries(data)) {
+                    flatData[k] = String(v);
+                }
+                await dbClient.hSet(getSessionKey(socketId), flatData);
+                await dbClient.expire(getSessionKey(socketId), 86400);
+            },
+            get: async (socketId) => {
+                const data = await dbClient.hGetAll(getSessionKey(socketId));
+                if (!data || Object.keys(data).length === 0) return null;
+                if (data.inQueue === 'true') data.inQueue = true;
+                if (data.inQueue === 'false') data.inQueue = false;
+                return data;
+            },
+            delete: async (socketId) => {
+                await dbClient.del(getSessionKey(socketId));
+            }
+        };
 
-                // A03: Injection Prevention - Strict Allowlist
-                if (!ALLOWED_LANGUAGES.includes(normalizedLang)) {
-                    console.warn(`Blocked invalid language request: ${normalizedLang} from ${socket.id}`);
-                    socket.emit('error', 'Invalid language selection');
+        // --- Socket Logic ---
+
+        io.on('connection', (socket) => {
+            console.log('User connected:', socket.id);
+
+            socket.on('join-queue', async ({ language }) => {
+                try {
+                    if (!language || typeof language !== 'string') return;
+
+                    const normalizedLang = language.toLowerCase();
+                    const ALLOWED_LANGUAGES = ['english', 'spanish', 'french', 'german', 'portuguese', 'russian'];
+
+                    // A03: Injection Prevention - Strict Allowlist
+                    if (!ALLOWED_LANGUAGES.includes(normalizedLang)) {
+                        console.warn(`Blocked invalid language request: ${normalizedLang} from ${socket.id}`);
+                        socket.emit('error', 'Invalid language selection');
+                        return;
+                    }
+
+                    console.log(`User ${socket.id} joining queue for ${normalizedLang}`);
+
+                    let matchFound = false;
+                    while (!matchFound) {
+                        const peerSocketId = await queueOps.pop(normalizedLang);
+
+                        if (!peerSocketId) {
+                            // Queue empty, wait
+                            await queueOps.push(normalizedLang, socket.id);
+                            await sessionOps.set(socket.id, { inQueue: true, language: normalizedLang });
+                            console.log(`User ${socket.id} added to ${normalizedLang} queue`);
+                            break;
+                        }
+
+                        if (peerSocketId === socket.id) {
+                            // Matched self (shouldn't happen often but possible if re-joining fast), push back
+                            await queueOps.returnToFront(normalizedLang, socket.id);
+                            // Just break to wait for someone else
+                            await sessionOps.set(socket.id, { inQueue: true, language: normalizedLang });
+                            break;
+                        }
+
+                        const peerSession = await sessionOps.get(peerSocketId);
+
+                        if (!peerSession) {
+                            console.log(`Peer ${peerSocketId} stale (no session), removing and trying next`);
+                            // Loop continues to next peer
+                            continue;
+                        }
+
+                        // Check if peer is still connected to socket.io (latency check)
+                        const sockets = await io.in(peerSocketId).fetchSockets();
+                        if (sockets.length === 0) {
+                            console.log(`Peer ${peerSocketId} socket disconnected, skipping`);
+                            await sessionOps.delete(peerSocketId); // Cleanup
+                            continue;
+                        }
+
+                        // Found valid peer
+                        matchFound = true;
+                        const roomId = `${peerSocketId}#${socket.id}`;
+
+                        // Set session data
+                        await sessionOps.set(socket.id, { roomId, language: normalizedLang, partnerSocketId: peerSocketId, inQueue: false });
+                        await sessionOps.set(peerSocketId, { roomId, language: normalizedLang, partnerSocketId: socket.id, inQueue: false });
+
+                        socket.join(roomId); // Local
+                        // Remote join (if Redis adapter) or local
+                        // If using Redis adapter, we need to use special method or assume sockets are on same node if not sharded
+                        // With io.in(peerSocketId).socketsJoin(roomId), it works across nodes if adapter is set
+                        io.in(peerSocketId).socketsJoin(roomId);
+
+                        io.to(socket.id).emit('match-found', { roomId, initiator: socket.id });
+                        io.to(peerSocketId).emit('match-found', { roomId, initiator: socket.id });
+
+                        console.log(`Match made: ${socket.id} & ${peerSocketId} in room ${roomId}`);
+                    }
+                } catch (e) {
+                    console.error('Error in join-queue:', e);
+                }
+            });
+
+            // Signaling events
+            // A01: Broken Access Control - Verify Signaling Partner
+            const validateSignal = async (socket, targetId) => {
+                const session = await sessionOps.get(socket.id);
+                if (!session || session.partnerSocketId !== targetId) {
+                    console.warn(`Blocked unauthorized signal from ${socket.id} to ${targetId}`);
+                    return false;
+                }
+                return true;
+            };
+
+            socket.on('offer', async (payload) => {
+                if (await validateSignal(socket, payload.target)) {
+                    socket.to(payload.target).emit('offer', payload);
+                }
+            });
+
+            socket.on('answer', async (payload) => {
+                if (await validateSignal(socket, payload.target)) {
+                    socket.to(payload.target).emit('answer', payload);
+                }
+            });
+
+            socket.on('ice-candidate', async (payload) => {
+                if (await validateSignal(socket, payload.target)) {
+                    socket.to(payload.target).emit('ice-candidate', payload);
+                }
+            });
+
+            socket.on('send-message', ({ roomId, message }) => {
+                // A03: Injection Prevention - Input Validation & Sanitization
+                if (!message || typeof message !== 'string' || message.length > 1000) {
+                    console.warn(`Blocked invalid/long message from ${socket.id}`);
                     return;
                 }
 
-                console.log(`User ${socket.id} joining queue for ${normalizedLang}`);
-
-                let matchFound = false;
-                while (!matchFound) {
-                    const peerSocketId = await queueOps.pop(normalizedLang);
-
-                    if (!peerSocketId) {
-                        // Queue empty, wait
-                        await queueOps.push(normalizedLang, socket.id);
-                        await sessionOps.set(socket.id, { inQueue: true, language: normalizedLang });
-                        console.log(`User ${socket.id} added to ${normalizedLang} queue`);
-                        break;
-                    }
-
-                    if (peerSocketId === socket.id) {
-                        // Matched self (shouldn't happen often but possible if re-joining fast), push back
-                        await queueOps.returnToFront(normalizedLang, socket.id);
-                        // Just break to wait for someone else
-                        await sessionOps.set(socket.id, { inQueue: true, language: normalizedLang });
-                        break;
-                    }
-
-                    const peerSession = await sessionOps.get(peerSocketId);
-
-                    if (!peerSession) {
-                        console.log(`Peer ${peerSocketId} stale (no session), removing and trying next`);
-                        // Loop continues to next peer
-                        continue;
-                    }
-
-                    // Found valid peer
-                    matchFound = true;
-                    const roomId = `${peerSocketId}#${socket.id}`;
-
-                    // Set session data
-                    await sessionOps.set(socket.id, { roomId, language: normalizedLang, partnerSocketId: peerSocketId, inQueue: false });
-                    await sessionOps.set(peerSocketId, { roomId, language: normalizedLang, partnerSocketId: socket.id, inQueue: false });
-
-                    socket.join(roomId); // Local
-                    io.in(peerSocketId).socketsJoin(roomId); // Remote or Local
-
-                    io.to(socket.id).emit('match-found', { roomId, initiator: socket.id });
-                    io.to(peerSocketId).emit('match-found', { roomId, initiator: socket.id });
-
-                    console.log(`Match made: ${socket.id} & ${peerSocketId} in room ${roomId}`);
+                if (!socket.rooms.has(roomId)) {
+                    console.warn(`Blocked unauthorized message to ${roomId} from ${socket.id}`);
+                    return;
                 }
-            } catch (e) {
-                console.error('Error in join-queue:', e);
-            }
-        });
 
-        // Signaling events
-        // A01: Broken Access Control - Verify Signaling Partner
-        const validateSignal = async (socket, targetId) => {
-            const session = await sessionOps.get(socket.id);
-            if (!session || session.partnerSocketId !== targetId) {
-                console.warn(`Blocked unauthorized signal from ${socket.id} to ${targetId}`);
-                return false;
-            }
-            return true;
-        };
+                // Sanitize XSS
+                const sanitizedMessage = xss(message);
 
-        socket.on('offer', async (payload) => {
-            if (await validateSignal(socket, payload.target)) {
-                socket.to(payload.target).emit('offer', payload);
-            }
-        });
+                socket.to(roomId).emit('receive-message', { message: sanitizedMessage, sender: 'partner' });
+            });
 
-        socket.on('answer', async (payload) => {
-            if (await validateSignal(socket, payload.target)) {
-                socket.to(payload.target).emit('answer', payload);
-            }
-        });
+            socket.on('disconnect', async () => {
+                console.log('User disconnected:', socket.id);
+                const session = await sessionOps.get(socket.id);
 
-        socket.on('ice-candidate', async (payload) => {
-            if (await validateSignal(socket, payload.target)) {
-                socket.to(payload.target).emit('ice-candidate', payload);
-            }
-        });
+                if (session) {
+                    if (session.inQueue) {
+                        await queueOps.remove(session.language, socket.id);
+                        console.log(`Removed ${socket.id} from ${session.language} queue`);
+                    } else if (session.roomId) {
+                        socket.to(session.roomId).emit('partner-disconnected');
+                    }
+                    await sessionOps.delete(socket.id);
+                }
+            });
 
-        socket.on('send-message', ({ roomId, message }) => {
-            // A03: Injection Prevention - Input Validation & Sanitization
-            if (!message || typeof message !== 'string' || message.length > 1000) {
-                console.warn(`Blocked invalid/long message from ${socket.id}`);
-                return;
-            }
-
-            // A01: Broken Access Control - Verify Room Membership
-            // socket.rooms is a Set containing the socket ID and any rooms joined.
-            if (!socket.rooms.has(roomId)) {
-                console.warn(`Blocked unauthorized message to ${roomId} from ${socket.id}`);
-                return;
-            }
-
-            // Sanitize XSS
-            const sanitizedMessage = xss(message);
-
-            socket.to(roomId).emit('receive-message', { message: sanitizedMessage, sender: 'partner' });
-        });
-
-        socket.on('disconnect', async () => {
-            console.log('User disconnected:', socket.id);
-            const session = await sessionOps.get(socket.id);
-
-            if (session) {
-                if (session.inQueue) {
-                    await queueOps.remove(session.language, socket.id);
-                    console.log(`Removed ${socket.id} from ${session.language} queue`);
-                } else if (session.roomId) {
+            socket.on('leave-room', async () => {
+                const session = await sessionOps.get(socket.id);
+                if (session && session.roomId) {
                     socket.to(session.roomId).emit('partner-disconnected');
-                    // Cleanup partner session data?
-                    // The partner is still online, but the "call" is over.
-                    // We might want to keep the partner's session active but remove the roomId link?
-                    // For now, minimal changes to logic: just notify.
+                    socket.leave(session.roomId);
+                    await sessionOps.delete(socket.id);
                 }
-                await sessionOps.delete(socket.id);
-            }
+            });
         });
 
-        socket.on('leave-room', async () => {
-            const session = await sessionOps.get(socket.id);
-            if (session && session.roomId) {
-                socket.to(session.roomId).emit('partner-disconnected');
-                socket.leave(session.roomId);
-
-                // Clean up session logic. Ideally, we shouldn't delete the session if we want them to rejoin queue immediately
-                // But for now, let's just clear the 'roomId' and 'partnerSocketId' fields or delete the whole session 
-                // and let them reconnect/re-establish?
-                // The client architecture seems to be: join-queue -> match.
-                // If they leave room, they might go back to home.
-                await sessionOps.delete(socket.id);
-            }
+        // --- Start Listener ---
+        const PORT = process.env.PORT || 5000;
+        server.listen(PORT, '0.0.0.0', () => {
+            console.log(`Worker ${process.pid} running on port ${PORT}`);
+            if (!useRedis) console.log('ℹ️  Running in In-Memory Mode');
         });
-    });
+    };
 
-    const PORT = process.env.PORT || 5000;
-    server.listen(PORT, '0.0.0.0', () => {
-        console.log(`Worker ${process.pid} running on port ${PORT}`);
-    });
+    // Start everything
+    startServer();
 }
+
 
