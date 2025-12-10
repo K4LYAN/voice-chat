@@ -22,6 +22,8 @@ const itemVariants = {
 };
 
 const LandingView = ({ languages, selectedFilters, onToggleFilter, onQuickStart, detectedLang, isConnected }) => {
+    const [searchTerm, setSearchTerm] = React.useState('');
+
     return (
         <motion.main
             className="hero-section"
@@ -76,46 +78,73 @@ const LandingView = ({ languages, selectedFilters, onToggleFilter, onQuickStart,
                                 <button className="pill-remove" onClick={(e) => { e.stopPropagation(); onToggleFilter(filter); }}>×</button>
                             </motion.span>
                         ))}
+                        <button className="pill-clear" onClick={() => selectedFilters.forEach(f => onToggleFilter(f))}>Clear</button>
                     </div>
                 </motion.div>
             )}
 
-            <div className="filter-header">Select Regional Languages</div>
+            <div className="filter-section">
+                <div className="filter-header-row">
+                    <span className="filter-header">Select Regional Languages</span>
+                    <div className="search-wrapper">
+                        <span className="search-icon">🔍</span>
+                        <input
+                            type="text"
+                            className="lang-search-input"
+                            placeholder="Search languages..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
 
-            <motion.div
-                className="language-grid"
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-            >
-                {languages.map(lang => {
-                    const isSelected = selectedFilters.includes(lang.code);
-                    const isDetected = detectedLang === lang.code;
+                <motion.div
+                    className="language-grid"
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    key={searchTerm} // Re-animate on search
+                >
+                    {languages
+                        .filter(lang =>
+                            lang.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            lang.native.toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                        .map(lang => {
+                            const isSelected = selectedFilters.includes(lang.code);
+                            const isDetected = detectedLang === lang.code;
 
-                    return (
-                        <motion.button
-                            key={lang.code}
-                            className={`lang-card ${isSelected ? 'selected' : ''}`}
-                            onClick={() => onToggleFilter(lang.code)}
-                            variants={itemVariants}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            layout
-                            aria-label={`Select ${lang.name}`}
-                            aria-pressed={isSelected}
-                        >
-                            <div className="lang-info">
-                                <span className="lang-name">{lang.name}</span>
-                                <span className="lang-native">{lang.native}</span>
-                            </div>
-                            <div className="lang-status">
-                                {isDetected && <span className="badge-detected">Detected</span>}
-                                {isSelected && <motion.span layoutId={`check-${lang.code}`} className="check-icon">✓</motion.span>}
-                            </div>
-                        </motion.button>
-                    );
-                })}
-            </motion.div>
+                            return (
+                                <motion.button
+                                    key={lang.code}
+                                    className={`lang-card ${isSelected ? 'selected' : ''}`}
+                                    onClick={() => onToggleFilter(lang.code)}
+                                    variants={itemVariants}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    layout
+                                    aria-label={`Select ${lang.name}`}
+                                    aria-pressed={isSelected}
+                                >
+                                    <div className="lang-info">
+                                        <span className="lang-name">{lang.name}</span>
+                                        <span className="lang-native">{lang.native}</span>
+                                    </div>
+                                    <div className="lang-status">
+                                        {isDetected && <span className="badge-detected">Detected</span>}
+                                        {isSelected && <motion.span layoutId={`check-${lang.code}`} className="check-icon">✓</motion.span>}
+                                    </div>
+                                </motion.button>
+                            );
+                        })}
+                </motion.div>
+
+                {languages.filter(l => l.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.7 }} className="no-results">
+                        No languages found matching "{searchTerm}"
+                    </motion.div>
+                )}
+            </div>
         </motion.main>
     );
 };

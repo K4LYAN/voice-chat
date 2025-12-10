@@ -214,18 +214,95 @@ p {
   box-shadow: 0 8px 25px rgba(138, 180, 248, 0.5);
 }
 
-.filter-header {
+.filter-section {
   width: 100%;
-  text-align: left;
+  margin-bottom: var(--spacing-sm);
+}
+
+.filter-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 12px;
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.filter-header {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-tertiary);
-  margin-bottom: var(--spacing-md);
-  border-bottom: 1px solid var(--border-subtle);
-  padding-bottom: 8px;
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--bg-element);
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  border: 1px solid var(--border-subtle);
+  width: 100%;
+  max-width: 220px;
+}
+
+.search-wrapper:focus-within {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-surface);
+}
+
+.search-icon {
+  font-size: 0.9rem;
+  opacity: 0.5;
+  margin-right: 8px;
+}
+
+.lang-search-input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  width: 100%;
+  outline: none;
+  padding: 4px 0;
+}
+
+.lang-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.pill-clear {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.pill-clear:hover {
+  background: var(--bg-element);
+  color: var(--text-primary);
+}
+
+.no-results {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  width: 100%;
+}
+
+/* Update older header style if needed */
+/* Language Grid */
 /* Active Filter Banner */
 .filter-banner {
   width: 100%;
@@ -597,6 +674,40 @@ p {
   .language-grid {
     grid-template-columns: repeat(2, 1fr);
     /* Better density than 1 column */
+  }
+
+  /* Horizontal Filter Scroll on Mobile */
+  .filter-banner {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    /* Hide scrollbar Firefox */
+  }
+
+  .filter-banner::-webkit-scrollbar {
+    display: none;
+    /* Hide scrollbar Chrome/Safari */
+  }
+
+  .filter-pills {
+    flex-wrap: nowrap;
+    width: max-content;
+  }
+
+  .filter-pill {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  .lang-card {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  .lang-native {
+    font-size: 0.7rem;
   }
 
   .session-layout {
