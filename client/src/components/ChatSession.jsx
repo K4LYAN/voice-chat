@@ -36,6 +36,10 @@ const ChatSession = ({
             // Set the stream
             video.srcObject = partnerStream;
 
+            // Explicitly enable audio and set volume
+            video.muted = false;
+            video.volume = 1.0;
+
             // Wait for video to be ready before playing
             const playVideo = async () => {
                 try {
