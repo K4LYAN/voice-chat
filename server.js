@@ -90,7 +90,8 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                     origin.startsWith('http://192.168.') ||
                     origin.startsWith('https://192.168.') ||
                     origin.startsWith('http://127.0.0.1') ||
-                    origin.startsWith('https://127.0.0.1')) {
+                    origin.startsWith('https://127.0.0.1') ||
+                    origin.endsWith('.vercel.app')) { // Allow Vercel deployments
                     return callback(null, true);
                 }
 
