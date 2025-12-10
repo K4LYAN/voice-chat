@@ -200,7 +200,13 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                 tempSub.on('error', ignoreErr);
                 tempDb.on('error', ignoreErr);
 
-                await Promise.all([tempPub.connect(), tempSub.connect(), tempDb.connect()]);
+                // Enforce a strict timeout for the connection
+                const connectPromise = Promise.all([tempPub.connect(), tempSub.connect(), tempDb.connect()]);
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Redis connection timed out')), 2000)
+                );
+
+                await Promise.race([connectPromise, timeoutPromise]);
 
                 // If we get here, connection successful
                 pubClient = tempPub;
