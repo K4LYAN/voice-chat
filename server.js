@@ -15,7 +15,7 @@ require('dotenv').config();
 
 require('dotenv').config();
 
-const numCPUs = os.cpus().length;
+const numCPUs = process.env.WEB_CONCURRENCY || 1; // Default to 1 worker for free/shared tiers to avoid OOM
 
 // Clustering only works in production (nodemon breaks it in dev)
 if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
@@ -104,20 +104,46 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     });
 
     // Redis setup
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-    const pubClient = createClient({ url: redisUrl });
+    let redisConfig;
+    if (process.env.REDIS_URL) {
+        redisConfig = { url: process.env.REDIS_URL };
+    } else if (process.env.REDIS_HOST) {
+        redisConfig = {
+            username: process.env.REDIS_USERNAME || 'default',
+            password: process.env.REDIS_PASSWORD,
+            socket: {
+                host: process.env.REDIS_HOST,
+                port: process.env.REDIS_PORT || 6379
+            }
+        };
+    } else {
+        console.warn('WARNING: No Redis configuration found! Using hardcoded fallback (Not recommended for production)');
+        redisConfig = {
+            username: 'default',
+            password: 'FkUVcI6GC38d3ZfsaybgMK9tqiGW8ze6',
+            socket: {
+                host: 'redis-19021.c266.us-east-1-3.ec2.cloud.redislabs.com',
+                port: 19021
+            }
+        };
+    }
+
+    // Create clients
+    const pubClient = createClient(redisConfig);
     const subClient = pubClient.duplicate();
-    const redisClient = createClient({ url: redisUrl }); // Using a dedicated client for commands might be cleaner or just use pubClient if not blocked? 
-    // Actually, pub/sub clients enter subscriber mode, so we need a regular client for commands like lpush/hset.
-    // pubClient can be used for publishing, but subClient is strictly for subscribing.
-    // To be safe and standard, let's keep a general 'dbClient' for data ops.
-    const dbClient = createClient({ url: redisUrl });
+    const dbClient = createClient(redisConfig);
 
     (async () => {
         try {
             await Promise.all([pubClient.connect(), subClient.connect(), dbClient.connect()]);
             io.adapter(createAdapter(pubClient, subClient));
             console.log('Connected to Redis and set up Socket.io Adapter');
+
+            // Verification Check (User Request)
+            await dbClient.set('foo', 'bar');
+            const result = await dbClient.get('foo');
+            console.log('Redis Verification Result (foo):', result); // >>> bar
+
         } catch (e) {
             console.error('Redis connection failed:', e);
             process.exit(1); // Cannot run scalable mode without Redis

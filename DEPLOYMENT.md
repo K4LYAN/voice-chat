@@ -33,8 +33,14 @@ This guide will help you deploy the Voice Chat application for free using **Rend
     - **Start Command**: `node server.js`.
     - **Instance Type**: `Free`.
     - **Environment Variables** (Click 'Advanced' or 'Environment'):
-        - Add `REDIS_URL`: Paste your Redis Cloud URL from step 2.
-        - Add `NODE_VERSION`: `18.17.0` (or higher).
+        - Option A (Recommended): Add `REDIS_URL`
+            - Value: `redis://default:FkUVcI6GC38d3ZfsaybgMK9tqiGW8ze6@redis-19021.c266.us-east-1-3.ec2.cloud.redislabs.com:19021`
+        - Option B (Granular): Add individual variables:
+            - `REDIS_HOST`: `redis-19021.c266.us-east-1-3.ec2.cloud.redislabs.com`
+            - `REDIS_PORT`: `19021`
+            - `REDIS_PASSWORD`: `FkUVcI6GC38d3ZfsaybgMK9tqiGW8ze6`
+        - Add `NODE_VERSION`: `18.17.0`
+        - Add `WEB_CONCURRENCY`: `1` (Ensures server stability on free tier)
     - Click **Create Web Service**.
 
 4.  **Wait for Deploy**: Even if it says "Live", it might take a minute.
