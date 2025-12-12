@@ -632,11 +632,57 @@ body {
   gap: 8px;
 }
 
+.session-controls {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-full);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  transition: all 0.3s ease;
+}
+
+.session-controls:hover {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
 .btn-control {
-  padding: 12px;
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
+  transition: transform 0.2s, background-color 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-control:hover {
+  transform: scale(1.1);
+  background: #ffffff;
+}
+
+.btn-control.danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-control.danger:hover {
+  background: #dc2626;
 }
 
 .btn-primary {

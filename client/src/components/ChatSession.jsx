@@ -79,6 +79,16 @@ const ChatSession = ({
         };
     }, [partnerStream, partnerVideoRef]);
 
+
+
+    // Ensure Local Video Stream is attached (Fix for PiP disappearance)
+    useEffect(() => {
+        if (myVideoRef.current && myStream) {
+            myVideoRef.current.srcObject = myStream;
+            myVideoRef.current.muted = true; // Always mute local video
+        }
+    }, [myStream, myVideoRef]);
+
     // Auto-scroll on new messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

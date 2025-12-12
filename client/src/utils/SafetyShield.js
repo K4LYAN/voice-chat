@@ -10,10 +10,21 @@ class SafetyShield {
         this.videoElement = null;
         this.model = null;
         this.lastCheckTime = 0;
-        this.checkInterval = 500; // 1.5 seconds
+
+        // Adaptive Sampling Settings
+        this.baseInterval = 1000; // Resting state
+        this.fastInterval = 200;  // Suspicion state
+        this.checkInterval = this.baseInterval;
+
+        // Intelligent Strike System
         this.strikeCount = 0;
-        this.strikeThreshold = 2;
-        this.confidenceThreshold = 0.75;
+        this.strikeThreshold = 2; // Block on 2nd strike
+        this.confidenceThreshold = 0.75; // Confirmed hit
+        this.suspicionThreshold = 0.10;  // 10% chance triggers fast mode
+
+        this.cleanFrameCount = 0;
+        this.decayThreshold = 5; // Decay 1 strike after 5 clean frames
+
         this.isBlurred = false;
         this.overlayDisplayTime = 0;
         this.isRunning = false;
@@ -107,36 +118,47 @@ class SafetyShield {
      * @param {Array} predictions 
      */
     processPredictions(predictions) {
-        // Current top prediction
+        // Find if any blocked category is present with significant probability
         const topPrediction = predictions[0];
-
-        // Check if meaningful
         if (!topPrediction) return;
 
-        const isBlockedContent = this.blockedCategories.includes(topPrediction.className);
-        const isHighConfidence = topPrediction.probability > this.confidenceThreshold;
+        const unsafePrediction = predictions.find(p =>
+            this.blockedCategories.includes(p.className) && p.probability > this.suspicionThreshold
+        );
 
-        if (isBlockedContent && isHighConfidence) {
-            this.strikeCount++;
-        } else {
-            // Reset strikes if clear to prevent sticking in a bad state forever?
-            // Or maybe decay logic. For simplicity: rapid consecutive checks needed.
-            // If we see a 'Neutral' or 'Drawing' or 'Sexy' (allowed), we reset strikes immediately?
-            // To be safe and strict but fair:
-            // If we see SAFE content effectively, we reset.
-            // 'Sexy' is explicitly ignored (treated as safe for blocking purposes).
-            this.strikeCount = 0;
-        }
+        if (unsafePrediction) {
+            // -- SUSPICION DETECTED --
+            // Switch to FAST interval for verfication
+            this.checkInterval = this.fastInterval;
 
-        if (this.strikeCount >= this.strikeThreshold) {
-            this.blockVideo();
+            // Check if it crosses the actual Blocking Threshold
+            if (unsafePrediction.probability > this.confidenceThreshold) {
+                this.strikeCount++;
+                this.cleanFrameCount = 0; // Reset clean count
+                // console.log(`SafetyShield: Strike! (${this.strikeCount}) - ${unsafePrediction.className} ${(unsafePrediction.probability*100).toFixed(0)}%`);
+            }
         } else {
-            // Optional: unblock if sustained clean? 
-            // Requirement doesn't explicitly say to unblock automatically, but a safety shield usually should recover.
-            // Let's assume if strikes are 0, we can unblock.
+            // -- SAFE FRAME --
+            // Return to BASE interval
+            this.checkInterval = this.baseInterval;
+            this.cleanFrameCount++;
+
+            // Intelligent Strike Decay
+            if (this.cleanFrameCount >= this.decayThreshold && this.strikeCount > 0) {
+                this.strikeCount--;
+                this.cleanFrameCount = 0;
+                // console.log(`SafetyShield: Strike Decayed (${this.strikeCount})`);
+            }
+
+            // Auto-unblock if clean and strikes are gone
             if (this.strikeCount === 0 && this.isBlurred) {
                 this.unblockVideo();
             }
+        }
+
+        // Apply Block if Threshold Reached
+        if (this.strikeCount >= this.strikeThreshold) {
+            this.blockVideo();
         }
     }
 
@@ -146,6 +168,8 @@ class SafetyShield {
     blockVideo() {
         if (this.isBlurred) return;
 
+        // Add smooth transition for the blur
+        this.videoElement.style.transition = 'filter 0.5s ease-out';
         this.videoElement.style.filter = 'blur(30px)';
 
         // Create overlay
@@ -164,6 +188,9 @@ class SafetyShield {
         this.videoElement.style.filter = 'none';
         this.removeOverlay();
         this.isBlurred = false;
+
+        // Clean up transition after a while so it doesn't affect other things? 
+        // Or keep it, it's fine.
     }
 
     /**
@@ -182,15 +209,18 @@ class SafetyShield {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
             color: 'white',
-            padding: '10px 20px',
-            borderRadius: '8px',
+            padding: '12px 24px',
+            borderRadius: '12px',
             zIndex: '1000',
-            fontFamily: 'sans-serif',
-            fontWeight: 'bold',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fontWeight: '600',
             pointerEvents: 'none', // Allow clicks to pass through if needed, though usually video is just display
-            textAlign: 'center'
+            textAlign: 'center',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            opacity: '0', // Start invisible for fade-in
+            transition: 'opacity 0.3s ease-in'
         });
 
         // We need to position this relative to the video video parent.
@@ -203,6 +233,13 @@ class SafetyShield {
                 parent.style.position = 'relative';
             }
             parent.appendChild(overlay);
+
+            // Trigger fade-in
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    overlay.style.opacity = '1';
+                });
+            });
         }
     }
 
