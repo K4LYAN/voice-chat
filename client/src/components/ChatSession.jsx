@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import SafetyShield from '../utils/SafetyShield';
 
 // Memoized Message Bubble to prevent re-rendering old messages
 const MessageBubble = React.memo(({ message, isMe }) => (
@@ -19,9 +20,8 @@ const ChatSession = ({
     onSendMessage,
     myVideoRef,
     partnerVideoRef,
+    myStream, // Added prop
     partnerStream,
-    isVoiceMode,
-    toggleVoiceMode,
     nextPartner,
     endCall
 }) => {
@@ -61,8 +61,17 @@ const ChatSession = ({
             playVideo();
         }
 
+        // Initialize Safety Shield
+        let shield = null;
+        if (partnerStream && partnerVideoRef.current) {
+            // Create and init shield with Direct Element Reference (Robust)
+            shield = new SafetyShield(partnerVideoRef.current);
+            shield.init();
+        }
+
         // Cleanup function to prevent interrupted play requests
         return () => {
+            if (shield) shield.stop();
             if (video && video.srcObject) {
                 video.pause();
                 video.srcObject = null;

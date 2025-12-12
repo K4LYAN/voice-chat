@@ -68,11 +68,10 @@ function App() {
     partnerStream,
     myVideoRef,
     partnerVideoRef,
-    isVoiceMode,
     initializePeer,
-    endCall: endCallRTC,
-    toggleVoiceMode
+    endCall: endCallRTC
   } = useWebRTC(socket);
+
 
   // Auto-detect language
   useEffect(() => {
@@ -255,9 +254,8 @@ function App() {
             onSendMessage={sendMessage}
             myVideoRef={myVideoRef}
             partnerVideoRef={partnerVideoRef}
+            myStream={myStream} // Pass local stream
             partnerStream={partnerStream}
-            isVoiceMode={isVoiceMode}
-            toggleVoiceMode={toggleVoiceMode}
             nextPartner={nextPartner}
             endCall={endCall}
           />

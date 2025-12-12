@@ -13,8 +13,6 @@ const rateLimit = require('express-rate-limit');
 const xss = require('xss');
 require('dotenv').config();
 
-require('dotenv').config();
-
 const numCPUs = process.env.WEB_CONCURRENCY || 1; // Default to 1 worker for free/shared tiers to avoid OOM
 
 // Clustering only works in production (nodemon breaks it in dev)

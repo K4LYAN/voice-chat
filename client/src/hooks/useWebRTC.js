@@ -4,7 +4,6 @@ import SimplePeer from 'simple-peer';
 export const useWebRTC = (socket) => {
     const [myStream, setMyStream] = useState(null);
     const [partnerStream, setPartnerStream] = useState(null);
-    const [isVoiceMode, setIsVoiceMode] = useState(false);
 
     const myVideoRef = useRef();
     const partnerVideoRef = useRef();
@@ -52,7 +51,6 @@ export const useWebRTC = (socket) => {
                     alert('Cannot establish connection without media access');
                     return;
                 }
-                setIsVoiceMode(true);
             }
 
             const peer = new SimplePeer({
@@ -82,16 +80,6 @@ export const useWebRTC = (socket) => {
                 if (partnerVideoRef.current) partnerVideoRef.current.srcObject = stream;
             });
 
-            // Track event handling (Fixed)
-            const remoteStream = new MediaStream();
-            peer.on('track', (track) => {
-                remoteStream.addTrack(track);
-                // Clone to ensure React detects state change
-                const newStream = new MediaStream(remoteStream.getTracks());
-                setPartnerStream(newStream);
-                if (partnerVideoRef.current) partnerVideoRef.current.srcObject = newStream;
-            });
-
             peer.on('close', () => {
                 connectionRef.current = null;
             });
@@ -106,29 +94,6 @@ export const useWebRTC = (socket) => {
 
         } catch (error) {
             console.error('Peer init error:', error);
-        }
-    };
-
-    const toggleVoiceMode = async () => {
-        const newMode = !isVoiceMode;
-        if (newMode) {
-            const stream = await getMedia();
-            if (stream) {
-                setIsVoiceMode(true);
-                if (connectionRef.current && !connectionRef.current.destroyed) {
-                    connectionRef.current.addStream(stream);
-                }
-            }
-        } else {
-            setIsVoiceMode(false);
-            stopMedia();
-            if (connectionRef.current && !connectionRef.current.destroyed && myStream) {
-                try {
-                    connectionRef.current.removeStream(myStream);
-                } catch (e) {
-                    console.warn(e);
-                }
-            }
         }
     };
 
@@ -175,10 +140,7 @@ export const useWebRTC = (socket) => {
         partnerStream,
         myVideoRef,
         partnerVideoRef,
-        isVoiceMode,
         initializePeer,
-        endCall,
-        toggleVoiceMode,
-        signalQueue // Exposed just in case, but internal handling is preferred
+        endCall
     };
 };
