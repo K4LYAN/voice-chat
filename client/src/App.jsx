@@ -11,7 +11,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 
 // Socket.io connection setup
 const getSocketUrl = () => {
-  if (process.env.VITE_SERVER_URL) return process.env.VITE_SERVER_URL;
+  if (process.env.SERVER_URL) return process.env.SERVER_URL;
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return `${window.location.protocol}//${window.location.hostname}:5000`;
   }
