@@ -62,7 +62,7 @@ This guide will help you deploy the Voice Chat application for free using **Rend
     - **Build Command**: `npm run build` (Default).
     - **Output Directory**: `dist` (Default).
     - **Environment Variables**:
-        - Key: `VITE_SERVER_URL`
+        - Key: `SERVER_URL`
         - Value: Your **Render Backend URL** (e.g., `https://voice-chat-backend.onrender.com`). *Note: No trailing slash is best.*
 
 4.  **Deploy**: Click **Deploy**.

@@ -317,6 +317,8 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                     'http://localhost:5173',
                     'http://127.0.0.1:5173',
                     'https://voice-chat-kappa.vercel.app', // Example
+                    // TODO: ADD YOUR ACTUAL VERCEL DOMAIN HERE (e.g., https://voice-chat-client.vercel.app)
+                    // 'https://your-app-name.vercel.app', 
                 ];
 
                 const mergedOrigins = [...defaultAllowedOrigins, ...allowedOrigins];
