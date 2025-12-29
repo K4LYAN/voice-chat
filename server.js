@@ -322,10 +322,13 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                 ];
 
                 const mergedOrigins = [...defaultAllowedOrigins, ...allowedOrigins];
-                if (mergedOrigins.indexOf(origin) !== -1) {
+
+                // Allow exact matches OR Vercel deployments
+                if (mergedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
                     // Origin allowed
                     callback(null, true);
                 } else {
+                    console.warn(`Blocked CORS origin: ${origin}`);
                     callback(new Error('Not allowed by CORS'));
                 }
             },
