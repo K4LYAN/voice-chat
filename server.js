@@ -15,6 +15,34 @@ const promClient = require('prom-client');
 const { instrument } = require('@socket.io/admin-ui');
 require('dotenv').config();
 
+// --- ADMIN SECURITY MIDDLEWARE ---
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // Default fallback
+
+const requireAdmin = (req, res, next) => {
+    const authHeader = req.headers['x-admin-password'];
+    if (!authHeader || authHeader !== ADMIN_PASSWORD) {
+        return res.status(403).json({ error: 'Unauthorized: Invalid Admin Password' });
+    }
+    next();
+};
+
+// --- LOGGING ---
+const MAX_LOG_SIZE = 1000;
+const matchHistory = []; // { timestamp, userA, userB, duration, reason }
+
+// Helper to log match
+const logMatch = (userA, userB, duration, reason) => {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        userA: userA ? { ip: userA.handshake.address, device: userA.handshake.query.deviceHash } : 'Unknown',
+        userB: userB ? { ip: userB.handshake.address, device: userB.handshake.query.deviceHash } : 'Unknown',
+        duration,
+        reason
+    };
+    matchHistory.unshift(entry);
+    if (matchHistory.length > MAX_LOG_SIZE) matchHistory.pop();
+};
+
 // --- Enhanced Logging Utility ---
 const LOG_LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 const currentLogLevel = LOG_LEVELS[process.env.LOG_LEVEL] || LOG_LEVELS.INFO;
@@ -146,50 +174,53 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     });
 
     // --- Admin Stats Endpoint (JSON) ---
-    app.get('/admin/stats', (req, res) => {
-        // Optional: Add basic auth for production
-        const currentUsers = io.engine.clientsCount || 0;
-        res.json({
-            currentUsers,
-            peakUsers: stats.peakUsers,
-            totalConnections: stats.totalConnections,
-            totalMatches: stats.totalMatches,
-            blockedIpsCount: blockedIps.size,
-            blockedDevicesCount: blockedDevices.size,
-            uptime: Math.floor((Date.now() - serverStartTime) / 1000) + 's',
-        });
+    app.get('/admin/stats', requireAdmin, async (req, res) => {
+        try {
+            const sockets = await io.fetchSockets();
+            const uptime = process.uptime();
+
+            res.json({
+                currentUsers: sockets.length,
+                totalConnections: stats.totalConnections,
+                totalMatches: stats.totalMatches,
+                peakUsers: stats.peakUsers,
+                uptime: Math.floor(uptime) + 's'
+            });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
     });
 
     // --- Admin Block Management Endpoints ---
-    app.post('/admin/block/ip/:ip', express.json(), (req, res) => {
+    app.post('/admin/block/ip/:ip', requireAdmin, express.json(), (req, res) => {
         const { ip } = req.params;
         blockedIps.add(ip);
         log.warn(`IP blocked: ${ip}`);
         res.json({ success: true, message: `IP ${ip} blocked` });
     });
 
-    app.delete('/admin/block/ip/:ip', (req, res) => {
+    app.delete('/admin/block/ip/:ip', requireAdmin, (req, res) => {
         const { ip } = req.params;
         blockedIps.delete(ip);
         log.info(`IP unblocked: ${ip}`);
         res.json({ success: true, message: `IP ${ip} unblocked` });
     });
 
-    app.post('/admin/block/device/:hash', express.json(), (req, res) => {
+    app.post('/admin/block/device/:hash', requireAdmin, express.json(), (req, res) => {
         const { hash } = req.params;
         blockedDevices.add(hash);
         log.warn(`Device blocked: ${hash}`);
         res.json({ success: true, message: `Device ${hash} blocked` });
     });
 
-    app.delete('/admin/block/device/:hash', (req, res) => {
+    app.delete('/admin/block/device/:hash', requireAdmin, (req, res) => {
         const { hash } = req.params;
         blockedDevices.delete(hash);
         log.info(`Device unblocked: ${hash}`);
         res.json({ success: true, message: `Device ${hash} unblocked` });
     });
 
-    app.get('/admin/blocked', (req, res) => {
+    app.get('/admin/blocked', requireAdmin, (req, res) => {
         res.json({
             blockedIps: Array.from(blockedIps),
             blockedDevices: Array.from(blockedDevices),
@@ -197,7 +228,7 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     });
 
     // --- Real-time Blocked Attempts Log ---
-    app.get('/admin/blocked/attempts', (req, res) => {
+    app.get('/admin/blocked/attempts', requireAdmin, (req, res) => {
         res.json({
             attempts: blockedAttempts,
             total: blockedAttempts.length
@@ -205,7 +236,7 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     });
 
     // --- Active Connections with IP Addresses ---
-    app.get('/admin/connections', (req, res) => {
+    app.get('/admin/connections', requireAdmin, (req, res) => {
         const connections = [];
         activeConnections.forEach((data, socketId) => {
             connections.push({
@@ -216,26 +247,19 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                 duration: Math.floor((Date.now() - new Date(data.connectedAt).getTime()) / 1000)
             });
         });
-        // Sort by most recent first
         connections.sort((a, b) => new Date(b.connectedAt) - new Date(a.connectedAt));
-        res.json({
-            connections,
-            total: connections.length
-        });
+        res.json({ connections, total: connections.length });
     });
 
-    // --- Queue Status (for matching queue visibility) ---
-    app.get('/admin/queue', (req, res) => {
-        // Get all sessions that are in queue
+    // --- Queue Status ---
+    app.get('/admin/queue', requireAdmin, (req, res) => {
         const queueStats = {
             total: 0,
             byGender: { male: 0, female: 0 },
             byPreference: { male: 0, female: 0 },
             users: []
         };
-
         activeConnections.forEach((data, socketId) => {
-            // Check if user has a session in queue (we'll track this separately)
             if (data.inQueue) {
                 queueStats.total++;
                 if (data.gender) queueStats.byGender[data.gender] = (queueStats.byGender[data.gender] || 0) + 1;
@@ -249,16 +273,59 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                 });
             }
         });
-
         queueStats.users.sort((a, b) => b.waitingTime - a.waitingTime);
         res.json(queueStats);
+    });
+
+    // --- Match History Logs ---
+    app.get('/admin/logs/matches', requireAdmin, (req, res) => {
+        res.json({ matches: matchHistory });
+    });
+
+    // --- Data Export ---
+    app.get('/admin/export/:type', requireAdmin, (req, res) => {
+        const { type } = req.params;
+        let data = [];
+        let fields = [];
+
+        if (type === 'matches') {
+            data = matchHistory;
+            fields = ['timestamp', 'duration', 'reason', 'userA_ip', 'userA_device', 'userB_ip', 'userB_device'];
+            data = data.map(m => ({
+                timestamp: m.timestamp,
+                duration: m.duration,
+                reason: m.reason,
+                userA_ip: m.userA?.ip || 'N/A',
+                userA_device: m.userA?.device || 'N/A',
+                userB_ip: m.userB?.ip || 'N/A',
+                userB_device: m.userB?.device || 'N/A'
+            }));
+        } else if (type === 'connections') {
+            // Export active connections history not tracked, export snapshot of current
+            activeConnections.forEach((d, id) => data.push({ socketId: id, ...d }));
+            fields = ['socketId', 'ip', 'deviceHash', 'connectedAt', 'inQueue'];
+        } else if (type === 'blocked_attempts') {
+            data = blockedAttempts;
+            fields = ['timestamp', 'ip', 'deviceHash', 'reason'];
+        } else {
+            return res.status(400).json({ error: 'Unknown export type' });
+        }
+
+        const csv = [
+            fields.join(','),
+            ...data.map(row => fields.map(field => JSON.stringify(row[field] || '')).join(','))
+        ].join('\n');
+
+        res.header('Content-Type', 'text/csv');
+        res.attachment(`${type}_logs_${Date.now()}.csv`);
+        res.send(csv);
     });
 
     // Store io reference for admin endpoints (will be set after io is created)
     let ioInstance = null;
 
     // --- Force Disconnect User ---
-    app.post('/admin/disconnect/:socketId', (req, res) => {
+    app.post('/admin/disconnect/:socketId', requireAdmin, (req, res) => {
         const { socketId } = req.params;
 
         if (!ioInstance) {
@@ -1227,6 +1294,10 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                     // REPUTATION CHECK (End of Call)
                     if (session.startTime && session.partnerSocketId) {
                         const duration = Date.now() - session.startTime;
+                        // Log match history on disconnect
+                        const partnerSocket = io.sockets.sockets.get(session.partnerSocketId);
+                        logMatch(socket, partnerSocket, duration, 'disconnect'); // User, Partner, Duration, Reason
+
                         if (duration > 60000) { // 1 Minute
                             const ip = getClientIp(socket);
                             await reputationOps.update(ip, 2);
@@ -1260,6 +1331,10 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                     // REPUTATION CHECK (End of Call)
                     if (session.startTime) {
                         const duration = Date.now() - session.startTime;
+                        // Log match history
+                        const partnerSocket = io.sockets.sockets.get(session.partnerSocketId);
+                        logMatch(socket, partnerSocket, duration, 'left-room');
+
                         if (duration > 60000) { // 1 Minute
                             const ip = getClientIp(socket);
                             await reputationOps.update(ip, 2);
