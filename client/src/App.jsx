@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import io from 'socket.io-client';
 import './App.css';
+import Navbar from './components/Navbar';
 import LandingView from './components/LandingView';
 import SearchingView from './components/SearchingView';
 import ChatSession from './components/ChatSession';
+import AdminDashboard from './components/AdminDashboard';
 import { useWebRTC } from './hooks/useWebRTC';
 
 // Socket.io connection setup
@@ -17,11 +19,26 @@ const getSocketUrl = () => {
 };
 
 const SOCKET_URL = getSocketUrl();
+
+// Generate or retrieve a unique device hash for blocking identification
+const getDeviceHash = () => {
+  let hash = localStorage.getItem('deviceHash');
+  if (!hash) {
+    // Generate a simple unique ID (in production, consider using FingerprintJS)
+    hash = 'device_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    localStorage.setItem('deviceHash', hash);
+  }
+  return hash;
+};
+
 const socket = io(SOCKET_URL, {
   transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionDelay: 1000,
-  reconnectionAttempts: 5
+  reconnectionAttempts: 5,
+  auth: {
+    deviceHash: getDeviceHash()
+  }
 });
 
 const LANGUAGE_DATA = [
@@ -50,17 +67,41 @@ const LANGUAGE_DATA = [
 ];
 
 function App() {
+  // Check if admin route
+  const [isAdmin, setIsAdmin] = useState(window.location.hash === '#admin');
+
+  // Listen for hash changes
+  useEffect(() => {
+    const handleHashChange = () => {
+      setIsAdmin(window.location.hash === '#admin');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // If admin route, show admin dashboard
+  if (isAdmin) {
+    return <AdminDashboard />;
+  }
+
   // State
   const [step, setStep] = useState('LANDING'); // LANDING, SEARCHING, CHATTING
-  const [language, setLanguage] = useState('');
+  const [language, setLanguage] = useState('Global'); // Default to Global
   const [roomId, setRoomId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // New Feature State
-  const [selectedFilters, setSelectedFilters] = useState([]);
-  const [detectedLang, setDetectedLang] = useState(null); // Keep detectedLang logic 
+  const [gender, setGender] = useState('male');
+  const [preferredGender, setPreferredGender] = useState('female');
+  const [interests, setInterests] = useState([]); // Track user interests
+  const [videoEnabled, setVideoEnabled] = useState(false); // Track video state
+
+  // Handle incoming E2EE messages
+  const onMessageReceived = useCallback((text) => {
+    setMessages(prev => [...prev, { text, sender: 'partner' }]);
+  }, []);
 
   // Use Custom WebRTC Hook
   const {
@@ -69,30 +110,26 @@ function App() {
     myVideoRef,
     partnerVideoRef,
     initializePeer,
-    endCall: endCallRTC
-  } = useWebRTC(socket);
+    endCall: endCallRTC,
+    getMedia,
+    enableVideo,
+    sendMessage: sendP2PMessage // Alias for clarity
+  } = useWebRTC(socket, onMessageReceived);
 
-
-  // Auto-detect language
-  useEffect(() => {
-    const browserLang = navigator.language || navigator.userLanguage;
-    const shortLang = browserLang.split('-')[0];
-    const found = LANGUAGE_DATA.find(l => l.loc === shortLang);
-
-    if (found) {
-      setDetectedLang(found.code);
-      setSelectedFilters(prev => {
-        // Only auto-select if empty (first load)
-        if (prev.length === 0) return [found.code];
-        return prev;
-      });
+  const handleEnableVideo = useCallback(async () => {
+    if (!videoEnabled) {
+      const result = await enableVideo();
+      if (result) {
+        setVideoEnabled(true);
+      }
     }
-  }, []);
+  }, [videoEnabled, enableVideo]);
 
   const endCall = useCallback((keepMedia = false) => {
     setStep('LANDING');
     setRoomId(null);
     setMessages([]);
+    setVideoEnabled(false); // Reset video state
     endCallRTC(keepMedia); // Delegated to hook
     socket.emit('leave-room');
   }, [endCallRTC]);
@@ -116,11 +153,13 @@ function App() {
 
       // Rejoin queue with same language
       setStep('SEARCHING');
-      socket.emit('join-queue', { language });
+      socket.emit('join-queue', { language: 'global' });
     });
 
     socket.on('receive-message', ({ message, sender }) => {
-      setMessages(prev => [...prev, { text: message, sender: 'partner' }]);
+      // Ideally remove this or keep as fallback? 
+      // User requested E2EE, so we ignore server messages for chat.
+      // setMessages(prev => [...prev, { text: message, sender: 'partner' }]);
     });
 
     return () => {
@@ -130,49 +169,61 @@ function App() {
       socket.off('partner-disconnected');
       socket.off('receive-message');
     };
-  }, [endCall, initializePeer, language, endCallRTC]);
+  }, [endCall, initializePeer, endCallRTC]);
 
+  const handleQuickStart = useCallback((selectedGender, selectedPreference) => {
+    // Default to 'global' queue to remove region filtering
+    joinQueue('global', selectedGender, selectedPreference);
+  }, [joinQueue]);
 
-  const toggleFilter = useCallback((lang) => {
-    setSelectedFilters(prev => {
-      if (prev.includes(lang)) return prev.filter(l => l !== lang);
-      return [...prev, lang];
-    });
-  }, []);
+  /* Destructure getMedia from the hook result at the top of the component first */
 
-  const handleQuickStart = useCallback(() => {
-    let targetLang;
-    if (selectedFilters.length > 0) {
-      const randomIndex = Math.floor(Math.random() * selectedFilters.length);
-      targetLang = selectedFilters[randomIndex];
+  const joinQueue = useCallback(async (lang = 'global', selectedGender, selectedPreference, selectedInterests) => {
+    // Request permissions early
+    const stream = await getMedia();
+
+    if (stream) {
+      setLanguage(lang);
+      setStep('SEARCHING');
+
+      // Use passed values or fallback to state (though state might be stale if just updated)
+      // Better to rely on what's passed from the modal
+      const g = selectedGender || gender;
+      const pg = selectedPreference || preferredGender;
+      const int = selectedInterests || interests || [];
+
+      socket.emit('join-queue', {
+        language: 'global',
+        gender: g,
+        preferredGender: pg,
+        interests: int.map(i => i.replace(/[⚽💻🎬🎮🎵🎨✈️🍕]\s*/g, '').toLowerCase()) // Strip emojis
+      });
     } else {
-      const randomIndex = Math.floor(Math.random() * LANGUAGE_DATA.length);
-      targetLang = LANGUAGE_DATA[randomIndex].code;
+      // Permission denied or error - stay on landing
+      // Optional: Show a toast/alert here if getMedia doesn't already
     }
-    joinQueue(targetLang);
-  }, [selectedFilters]); // joinQueue is defined below, wait. cyclic dep?
-  // joinQueue depends on socket, safe.
-
-  const handleGlobalSearch = useCallback(() => {
-    const randomIndex = Math.floor(Math.random() * LANGUAGE_DATA.length);
-    joinQueue(LANGUAGE_DATA[randomIndex].code);
-  }, []);
-
-  const joinQueue = useCallback((lang) => {
-    setLanguage(lang);
-    setStep('SEARCHING');
-    socket.emit('join-queue', { language: lang });
-  }, []);
+  }, [getMedia, gender, preferredGender, interests]);
 
   const sendMessage = useCallback((text) => {
-    socket.emit('send-message', { roomId, message: text });
+    // socket.emit('send-message', { roomId, message: text }); // Old Server-Relayed
+    sendP2PMessage(text); // New E2EE
     setMessages(prev => [...prev, { text: text, sender: 'me' }]);
-  }, [roomId]);
+  }, [sendP2PMessage]);
 
-  const nextPartner = useCallback(() => {
+  const nextPartner = useCallback((selectedGender = null, selectedPreference = null) => {
+    // Update gender preferences if provided
+    if (selectedGender) setGender(selectedGender);
+    if (selectedPreference) setPreferredGender(selectedPreference);
+
     endCall(true); // Keep media for next call
-    joinQueue(language);
-  }, [endCall, joinQueue, language]);
+
+    // Use the newly selected preferences or existing ones
+    const genderToUse = selectedGender || gender;
+    const prefToUse = selectedPreference || preferredGender;
+
+    setStep('SEARCHING');
+    socket.emit('join-queue', { language: 'global', gender: genderToUse, preferredGender: prefToUse });
+  }, [endCall, gender, preferredGender]);
 
   const leaveQueue = useCallback(() => {
     socket.emit('leave-queue');
@@ -181,69 +232,31 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Navbar */}
-      <nav className="navbar">
-        <a href="/" className="brand">
-          <div className="brand-icon">V</div>
-          VoiceChat
-        </a>
-
-        {/* Desktop Links */}
-        <div className="nav-links desktop-only">
-          <a href="#" className="nav-link">Community</a>
-          <a href="#" className="nav-link">Safety</a>
-          <a href="#" className="nav-link">Support</a>
-        </div>
-
-        <div className="nav-right">
-          <div className="status-indicator desktop-only">
-            <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
-            {isConnected ? 'Online' : 'Reconnecting...'}
-          </div>
-
-          {/* Mobile Menu Toggle */}
-          <button
-            className="mobile-menu-btn"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            {isMobileMenuOpen ? '✕' : '☰'}
-          </button>
-        </div>
-
-        {/* Mobile Menu Dropdown */}
-        {isMobileMenuOpen && (
-          <div className="mobile-menu">
-            <a href="#" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Community</a>
-            <a href="#" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Safety</a>
-            <a href="#" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Support</a>
-            <div className="mobile-status">
-              <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
-              {isConnected ? 'Online' : 'Reconnecting...'}
-            </div>
-          </div>
-        )}
-      </nav>
-
-      {/* Main Content Area */}
+      <Navbar
+        isConnected={isConnected}
+      />
       <AnimatePresence mode="wait">
         {step === 'LANDING' && (
           <LandingView
             key="landing"
-            languages={LANGUAGE_DATA}
-            selectedFilters={selectedFilters}
-            onToggleFilter={toggleFilter}
             onQuickStart={handleQuickStart}
             isConnected={isConnected}
+            gender={gender}
+            preferredGender={preferredGender}
+            onGenderChange={setGender}
+            onPreferredGenderChange={setPreferredGender}
+            interests={interests}
+            onInterestsChange={setInterests}
           />
         )}
 
         {step === 'SEARCHING' && (
           <SearchingView
             key="searching"
-            language={language}
+            language="Global"
             onCancel={leaveQueue}
-            onSearchGlobal={handleGlobalSearch}
+            onSearchGlobal={handleQuickStart} // Re-use simplified join
+            myStream={myStream} // Pass stream for self-view
           />
         )}
 
@@ -258,6 +271,15 @@ function App() {
             partnerStream={partnerStream}
             nextPartner={nextPartner}
             endCall={endCall}
+            gender={gender}
+            preferredGender={preferredGender}
+            language="Global"
+            onGenderChange={setGender}
+            onPreferredGenderChange={setPreferredGender}
+            onLanguageChange={() => { }} // No-op
+            languages={[]} // Empty
+            videoEnabled={videoEnabled}
+            onEnableVideo={handleEnableVideo}
           />
         )}
       </AnimatePresence>

@@ -1,189 +1,175 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import Hero from './Hero';
+import Features from './Features';
+import Footer from './Footer';
 
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.05,
-            delayChildren: 0.1
+const LandingView = ({
+    onQuickStart,
+    isConnected,
+    gender,
+    preferredGender,
+    onGenderChange,
+    onPreferredGenderChange,
+    interests,
+    onInterestsChange
+}) => {
+    const [showAgeGate, setShowAgeGate] = React.useState(false);
+    const [showGenderModal, setShowGenderModal] = React.useState(false);
+
+    //Available interests
+    const availableInterests = [
+        '⚽ Sports', '💻 Tech', '🎬 Movies', '🎮 Gaming',
+        '🎵 Music', '🎨 Art', '✈️ Travel', '🍕 Food'
+    ];
+
+    React.useEffect(() => {
+        const verified = localStorage.getItem('age_verified');
+        if (!verified) {
+            setShowAgeGate(true);
         }
-    }
-};
+    }, []);
 
-const itemVariants = {
-    hidden: { opacity: 0, y: 10 },
-    visible: {
-        opacity: 1,
-        y: 0,
-        transition: { type: "tween", duration: 0.3 }
-    }
-};
+    const handleAgeVerify = () => {
+        localStorage.setItem('age_verified', 'true');
+        setShowAgeGate(false);
+    };
 
-const LandingView = ({ languages, selectedFilters, onToggleFilter, onQuickStart, detectedLang, isConnected }) => {
-    const [searchTerm, setSearchTerm] = React.useState('');
+    const handleStartClick = () => {
+        setShowGenderModal(true);
+    };
+
+    const toggleInterest = (interest) => {
+        const current = interests || [];
+        if (current.includes(interest)) {
+            onInterestsChange(current.filter(i => i !== interest));
+        } else {
+            onInterestsChange([...current, interest]);
+        }
+    };
+
+    const handleConfirmMatch = () => {
+        setShowGenderModal(false);
+        onQuickStart(gender, preferredGender, interests || []);
+    };
 
     return (
-        <div className="landing-page-wrapper">
-            <motion.section
-                className="hero-section"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
-            >
-                <h1 className="hero-title">
-                    Global Connection.
-                </h1>
+        <div className="landing-page-wrapper premium-layout">
 
-                <p className="hero-subtitle">
-                    Connect instantly with people who speak your language. Simple, fast, and free.
-                </p>
-
-                {/* Quick Start CTA */}
-                <motion.button
-                    className="btn-quick-start"
-                    onClick={onQuickStart}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                >
-                    <div className="btn-icon">⚡</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                        <span style={{ fontSize: '1rem', fontWeight: 600 }}>{selectedFilters.length > 0 ? 'Start Matching' : 'Global Quick Start'}</span>
-                    </div>
-                </motion.button>
-
-                {/* Active Filter Banner */}
-                {selectedFilters.length > 0 && (
-                    <div className="filter-banner">
-                        {selectedFilters.map(filter => (
-                            <motion.span key={filter} layoutId={`pill-${filter}`} className="filter-pill">
-                                {filter}
-                                <button className="pill-remove" onClick={(e) => { e.stopPropagation(); onToggleFilter(filter); }}>×</button>
-                            </motion.span>
-                        ))}
-                        <button className="pill-clear" onClick={() => selectedFilters.forEach(f => onToggleFilter(f))}>Clear All</button>
-                    </div>
-                )}
-
-                <div className="filter-section">
-                    <div className="filter-header-row">
-                        <span className="filter-header">Select Language</span>
-                        <div className="search-wrapper">
-                            <span className="search-icon" style={{ opacity: 0.5, fontSize: '0.9rem' }}>🔍</span>
-                            <input
-                                type="text"
-                                className="lang-search-input"
-                                placeholder="Find..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
+            {/* Gender Selection Modal */}
+            <AnimatePresence>
+                {showGenderModal && (
                     <motion.div
-                        className="language-grid"
-                        variants={containerVariants}
-                        initial="hidden"
-                        animate="visible"
-                        key={searchTerm}
+                        className="age-gate-overlay" // Reuse overlay style
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                     >
-                        {languages
-                            .filter(lang =>
-                                lang.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                lang.native.toLowerCase().includes(searchTerm.toLowerCase())
-                            )
-                            .map(lang => {
-                                const isSelected = selectedFilters.includes(lang.code);
+                        <motion.div
+                            className="gender-modal-glass"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                        >
+                            <h2 className="modal-title-premium">Customize Match</h2>
 
-                                return (
-                                    <motion.button
-                                        key={lang.code}
-                                        className={`lang-card ${isSelected ? 'selected' : ''}`}
-                                        onClick={() => onToggleFilter(lang.code)}
-                                        variants={itemVariants}
-                                        whileHover={{ y: -2 }}
-                                        whileTap={{ y: 0 }}
-                                    >
-                                        <div className="lang-info">
-                                            <span className="lang-name">{lang.name}</span>
-                                            <span className="lang-native">{lang.native}</span>
-                                        </div>
-                                        {isSelected && (
-                                            <motion.div
-                                                initial={{ scale: 0 }}
-                                                animate={{ scale: 1 }}
-                                                className="check-icon"
+                            {/* Reusing the container style, ensure CSS is global or in App.css */}
+                            <div className="gender-filter-container" style={{ margin: 0 }}>
+                                <div className="filter-row">
+                                    <span className="filter-label">I am:</span>
+                                    <div className="filter-options">
+                                        {['Male', 'Female'].map((g) => (
+                                            <button
+                                                key={g}
+                                                className={`filter-pill ${gender === g.toLowerCase() ? 'active' : ''}`}
+                                                onClick={() => onGenderChange(g.toLowerCase())}
                                             >
-                                                ✓
-                                            </motion.div>
-                                        )}
-                                    </motion.button>
-                                );
-                            })}
+                                                {g}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="filter-row">
+                                    <span className="filter-label">Looking for:</span>
+                                    <div className="filter-options">
+                                        {['Male', 'Female', 'Any'].map((g) => (
+                                            <button
+                                                key={g}
+                                                className={`filter-pill ${preferredGender === g.toLowerCase() ? 'active' : ''}`}
+                                                onClick={() => onPreferredGenderChange(g.toLowerCase())}
+                                            >
+                                                {g === 'Any' ? 'Anyone' : g}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Interests Selection */}
+                            <div className="interests-section" style={{ marginTop: '1.5rem' }}>
+                                <span className="filter-label" style={{ marginBottom: '0.75rem', display: 'block' }}>
+                                    Interests (optional):
+                                </span>
+                                <div className="interests-grid">
+                                    {availableInterests.map((interest) => (
+                                        <button
+                                            key={interest}
+                                            className={`interest-chip ${(interests || []).includes(interest) ? 'selected' : ''}`}
+                                            onClick={() => toggleInterest(interest)}
+                                        >
+                                            {interest}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="interest-hint">Select topics you're interested in for better matches</p>
+                            </div>
+
+                            <button className="btn-confirm-glass" onClick={handleConfirmMatch}>
+                                ⚡ Start Matching
+                            </button>
+                        </motion.div>
                     </motion.div>
-                </div>
-            </motion.section>
+                )}
+            </AnimatePresence>
 
-            {/* How It Works Section */}
-            <section className="section-container how-it-works">
-                <h2 className="section-title">How It Works</h2>
-                <div className="steps-grid">
-                    <div className="step-card">
-                        <div className="step-number">01</div>
-                        <h3>Select Language</h3>
-                        <p>Choose your preferred language or region to find matching partners.</p>
-                    </div>
-                    <div className="step-card">
-                        <div className="step-number">02</div>
-                        <h3>Instant Match</h3>
-                        <p>Our algorithm connects you with available users in seconds.</p>
-                    </div>
-                    <div className="step-card">
-                        <div className="step-number">03</div>
-                        <h3>Start Chatting</h3>
-                        <p>Connect via high-quality video and audio. No sign-up required.</p>
-                    </div>
-                </div>
-            </section>
+            {/* Age Gate Modal */}
+            <AnimatePresence>
+                {showAgeGate && (
+                    <motion.div
+                        className="age-gate-overlay"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        <motion.div
+                            className="age-gate-modal-glass"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                        >
+                            <div className="age-gate-icon">🔞</div>
+                            <h2>Age Verification</h2>
+                            <p>
+                                This platform is restricted to users aged 16 and above.
+                                <br />
+                                Please confirm your age to proceed.
+                            </p>
+                            <button className="btn-age-confirm-premium" onClick={handleAgeVerify}>
+                                I am 16+ and agree
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
-            {/* Features Section */}
-            <section className="section-container features-section">
-                <div className="feature-content">
-                    <h2 className="section-title">Why VoiceChat?</h2>
-                    <div className="features-grid">
-                        <div className="feature-item">
-                            <span className="feature-icon">🔒</span>
-                            <h3>Anonymous & Safe</h3>
-                            <p>We don't store your data. Chats are peer-to-peer and private.</p>
-                        </div>
-                        <div className="feature-item">
-                            <span className="feature-icon">🌍</span>
-                            <h3>Global Reach</h3>
-                            <p>Connect with people from over 100 countries instantly.</p>
-                        </div>
-                        <div className="feature-item">
-                            <span className="feature-icon">⚡</span>
-                            <h3>Lightning Fast</h3>
-                            <p>Optimized for low-latency video even on slow networks.</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
+            <Hero
+                onQuickStart={handleStartClick}
+            />
 
-            {/* Simple Footer */}
-            <footer className="site-footer">
-                <div className="footer-content">
-                    <div className="footer-brand">VoiceChat</div>
-                    <div className="footer-links">
-                        <span>Terms</span>
-                        <span>Privacy</span>
-                        <span>Contact</span>
-                    </div>
-                    <div className="footer-copyright">© 2024 VoiceChat Inc.</div>
-                </div>
-            </footer>
+            <Features />
+
+            <Footer isConnected={isConnected} />
         </div>
     );
 };

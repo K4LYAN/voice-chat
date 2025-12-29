@@ -1,227 +1,222 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const SearchingView = ({ language, onCancel, onSearchGlobal }) => {
+// Conversation Helpers
+const CONVERSATION_TIPS = [
+    { type: 'tip', text: "Start with a simple 'Hi, where are you from?'" },
+    { type: 'question', text: "Ask: 'If you could travel anywhere right now, where would you go?'" },
+    { type: 'mindset', text: "Smile! It makes your voice sound friendlier." },
+    { type: 'question', text: "Ask: 'What was the highlight of your week so far?'" },
+    { type: 'tip', text: "Don't worry about awkward silences, they happen to everyone." },
+    { type: 'question', text: "Ask: 'Have you seen any good movies lately?'" },
+];
+
+const SEARCH_PHASES = [
+    "Initializing Uplink...",
+    "Scanning Global Nodes...",
+    "Ping 24ms... Stable",
+    "Searching Network...",
+    "Triangulating Signals...",
+    "Handshake Protocol Ready..."
+];
+
+const SearchingView = ({ language, onCancel, onSearchGlobal, myStream }) => {
     const [status, setStatus] = React.useState('SEARCHING'); // SEARCHING, TIMEOUT
-    const [progress, setProgress] = React.useState(0);
     const [elapsed, setElapsed] = React.useState(0);
+    const [tipIndex, setTipIndex] = React.useState(0);
+    const [phaseIndex, setPhaseIndex] = React.useState(0);
+    const [usersOnline, setUsersOnline] = React.useState(1240);
+    const localVideoRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (localVideoRef.current && myStream) {
+            localVideoRef.current.srcObject = myStream;
+        }
+    }, [myStream]);
 
     React.useEffect(() => {
         const timer = setTimeout(() => {
             setStatus('TIMEOUT');
-        }, 30000); // 30s timeout (increased from 15s)
+        }, 30000); // 30s timeout
 
         return () => clearTimeout(timer);
     }, []);
 
-    // Progress bar animation
+    // Progress, Tips, and Stats Animation
     React.useEffect(() => {
         if (status === 'SEARCHING') {
+            // General elapsed timer
             const interval = setInterval(() => {
-                setProgress(prev => {
-                    if (prev >= 100) return 0; // Loop
-                    return prev + 0.5; // Smooth increment
-                });
                 setElapsed(prev => prev + 0.1);
             }, 100);
 
-            return () => clearInterval(interval);
+            // Cycle tips every 6 seconds
+            const tipInterval = setInterval(() => {
+                setTipIndex(prev => (prev + 1) % CONVERSATION_TIPS.length);
+            }, 6000);
+
+            // Cycle phases every 2.5 seconds
+            const phaseInterval = setInterval(() => {
+                setPhaseIndex(prev => (prev + 1) % SEARCH_PHASES.length);
+            }, 2500);
+
+            // Fluctuate users online count randomly
+            const usersInterval = setInterval(() => {
+                setUsersOnline(prev => {
+                    const change = Math.floor(Math.random() * 5) - 2; // -2 to +2
+                    return prev + change;
+                });
+            }, 2000);
+
+            return () => {
+                clearInterval(interval);
+                clearInterval(tipInterval);
+                clearInterval(phaseInterval);
+                clearInterval(usersInterval);
+            };
         }
     }, [status]);
 
     const handleKeepWaiting = () => {
         setStatus('SEARCHING');
-        setProgress(0);
         setElapsed(0);
+        setTipIndex(0);
+        setPhaseIndex(0);
     };
 
     return (
         <motion.div
-            className="searching-container"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="searching-view-container"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
         >
-            <motion.div
-                className="scanner-card"
-                initial={{ y: 20 }}
-                animate={{ y: 0 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-            >
-                {/* Enhanced Visual Radar */}
-                <div className="radar-wrapper">
-                    {/* Rotating scanner sweep */}
-                    <motion.div
-                        className="radar-sweep"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                    />
+            <div className="searching-bg-mesh" />
 
-                    {/* Animated rings */}
-                    <motion.div
-                        className="radar-ring r1"
-                        animate={{
-                            scale: [1, 2.2],
-                            opacity: [0.6, 0]
-                        }}
-                        transition={{
-                            duration: 2.5,
-                            repeat: Infinity,
-                            ease: "easeOut"
-                        }}
-                    />
-                    <motion.div
-                        className="radar-ring r2"
-                        animate={{
-                            scale: [1, 2.8],
-                            opacity: [0.4, 0]
-                        }}
-                        transition={{
-                            duration: 2.5,
-                            repeat: Infinity,
-                            ease: "easeOut",
-                            delay: 0.8
-                        }}
-                    />
-                    <motion.div
-                        className="radar-ring r3"
-                        animate={{
-                            scale: [1, 3.2],
-                            opacity: [0.3, 0]
-                        }}
-                        transition={{
-                            duration: 2.5,
-                            repeat: Infinity,
-                            ease: "easeOut",
-                            delay: 1.6
-                        }}
-                    />
-
-                    {/* Pulsing core */}
-                    <motion.div
-                        className="radar-core"
-                        animate={{
-                            scale: [1, 1.2, 1],
-                            boxShadow: [
-                                '0 0 20px rgba(59, 130, 246, 0.5)',
-                                '0 0 40px rgba(59, 130, 246, 0.8)',
-                                '0 0 20px rgba(59, 130, 246, 0.5)'
-                            ]
-                        }}
-                        transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                        }}
-                    />
+            <div className="search-card-glass">
+                {/* Visual Header */}
+                <div className="scanner-header">
+                    <div className="scanner-badge">
+                        <span className="badge-dot" />
+                        <span>Searching: {language || 'Global'}</span>
+                    </div>
                 </div>
 
-                {/* Status text with animation */}
-                <motion.div
-                    className="scanner-info"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                >
-                    <h2 className="scanner-status">
-                        {status === 'SEARCHING' ? (
-                            <span>
-                                SCANNING
-                                <motion.span
-                                    animate={{ opacity: [0, 1, 0] }}
-                                    transition={{ duration: 1.5, repeat: Infinity }}
-                                >
-                                    ...
-                                </motion.span>
-                            </span>
-                        ) : 'TIMEOUT'}
-                    </h2>
-                    <p className="scanner-subtext">
-                        {status === 'SEARCHING'
-                            ? `Looking for ${language} speakers`
-                            : 'No match found yet.'}
-                    </p>
+                {/* Radar Area */}
+                <div className="radar-container">
+                    <div className="radar-ring ring-outer" />
+                    <div className="radar-ring ring-inner" />
 
-                    {/* Elapsed time */}
-                    {status === 'SEARCHING' && (
-                        <motion.p
-                            className="scanner-elapsed"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 0.6 }}
-                            transition={{ delay: 0.5 }}
-                        >
-                            {elapsed.toFixed(1)}s elapsed
-                        </motion.p>
+                    <div className="radar-avatar-frame">
+                        {myStream ? (
+                            <video
+                                ref={localVideoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="radar-video"
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-slate-100 flex items-center justify-center text-3xl">
+                                👋
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Queue Stats (New Feature) */}
+                <div className="queue-stats-container">
+                    <div className="stat-badge-glass">
+                        <span className="live-dot" />
+                        <span>{usersOnline.toLocaleString()} Online</span>
+                    </div>
+                    <div className="stat-badge-glass">
+                        <span>⏱️ &lt; 15s Wait</span>
+                    </div>
+                </div>
+
+                {/* Text Content with Dynamic Phases */}
+                <div className="status-wrapper">
+                    {status === 'SEARCHING' ? (
+                        <>
+                            <div className="phase-text-container">
+                                <AnimatePresence mode="wait">
+                                    <motion.p
+                                        key={phaseIndex}
+                                        className="phase-text"
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -5 }}
+                                    >
+                                        &gt; {SEARCH_PHASES[phaseIndex]}
+                                    </motion.p>
+                                </AnimatePresence>
+                            </div>
+                            <h2 className="status-title">Looking for a partner...</h2>
+                        </>
+                    ) : (
+                        <>
+                            <h2 className="status-title">It's quiet right now</h2>
+                            <p className="status-subtitle">
+                                No partners found in <strong>{language || 'Global'}</strong>.
+                            </p>
+                        </>
                     )}
-                </motion.div>
+                </div>
 
-                {/* Progress bar */}
+                {/* Tips Carousel (Only when searching) */}
                 {status === 'SEARCHING' && (
-                    <motion.div
-                        className="progress-bar-container"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.3 }}
-                    >
-                        <motion.div
-                            className="progress-bar"
-                            style={{ width: `${progress % 100}%` }}
-                        />
-                    </motion.div>
+                    <div className="tip-carousel">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={tipIndex}
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                className="flex flex-col items-center"
+                            >
+                                <span className="tip-label">
+                                    {CONVERSATION_TIPS[tipIndex].type === 'question' ? 'Icebreaker' : 'Pro Tip'}
+                                </span>
+                                <p className="tip-text">
+                                    "{CONVERSATION_TIPS[tipIndex].text}"
+                                </p>
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
                 )}
 
-                {/* Actions with stagger animation */}
-                <AnimatePresence mode="wait">
+                {/* Actions */}
+                <div className="search-actions">
                     {status === 'TIMEOUT' ? (
-                        <motion.div
-                            className="scanner-actions"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3 }}
-                        >
-                            <motion.button
-                                className="btn btn-primary"
-                                onClick={onSearchGlobal}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                            >
-                                Global Search
-                            </motion.button>
-                            <motion.button
-                                className="btn btn-secondary"
-                                onClick={handleKeepWaiting}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                            >
+                        <>
+                            <button className="btn-global-search" onClick={onSearchGlobal}>
+                                Try Global Search
+                            </button>
+                            <button className="btn-cancel-glass" onClick={handleKeepWaiting}>
                                 Keep Waiting
-                            </motion.button>
-                            <motion.button
-                                className="btn btn-text"
+                            </button>
+                            <button
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#94a3b8',
+                                    padding: '8px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem'
+                                }}
                                 onClick={onCancel}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
                             >
                                 Cancel
-                            </motion.button>
-                        </motion.div>
+                            </button>
+                        </>
                     ) : (
-                        <motion.button
-                            className="btn-cancel-pill"
-                            onClick={onCancel}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            whileHover={{ scale: 1.05, backgroundColor: '#fee2e2' }}
-                            whileTap={{ scale: 0.95 }}
-                            transition={{ delay: 0.4 }}
-                        >
-                            Cancel Scan
-                        </motion.button>
+                        <button className="btn-cancel-glass" onClick={onCancel}>
+                            Cancel Search
+                        </button>
                     )}
-                </AnimatePresence>
-            </motion.div>
+                </div>
+            </div>
         </motion.div>
     );
 };

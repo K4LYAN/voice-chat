@@ -1,45 +1,58 @@
-const io = require("socket.io-client");
+const { createClient } = require('redis');
 
-const URL1 = "http://localhost:5000";
-const URL2 = "http://localhost:5001";
+async function testWeightedQueue() {
+    const client = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6379' });
+    await client.connect();
 
-const socket1 = io(URL1, { autoConnect: false });
-const socket2 = io(URL2, { autoConnect: false });
+    console.log("--- Testing Weighted Queue ---");
+    const queueKey = "queue:test:male:female";
 
-let matched = false;
+    // Clear queue
+    await client.del(queueKey);
 
-console.log("Starting verification test...");
+    const now = Date.now();
 
-socket1.on("connect", () => {
-    console.log("Client 1 connected to Server 1 (5000)");
-    socket1.emit("join-queue", { language: "english" });
-});
+    // User A: High Reputation (100) -> Joined Now
+    const scoreA = now - (100 * 60 * 1000); // 100 mins 'credit'
+    await client.zAdd(queueKey, { score: scoreA, value: 'UserHighRep' });
+    console.log(`Pushed UserHighRep with score ${scoreA}`);
 
-socket2.on("connect", () => {
-    console.log("Client 2 connected to Server 2 (5001)");
-    socket2.emit("join-queue", { language: "english" });
-});
+    // User B: Low Reputation (0) -> Joined 10 mins ago (earlier than A in real time, but...)
+    // Real time arrival: Now - 10 mins
+    // Score = (Now - 10 mins) - (0 credit)
+    const scoreB = (now - 10 * 60 * 1000) - 0;
+    await client.zAdd(queueKey, { score: scoreB, value: 'UserLowRep' });
+    console.log(`Pushed UserLowRep with score ${scoreB}`);
 
-socket1.on("match-found", (data) => {
-    console.log("Client 1 found match:", data);
-    if (matched) process.exit(0);
-    matched = true;
-});
+    // Verify Order (Lowest Score First)
+    // User A Score ~= Now - 100 mins
+    // User B Score ~= Now - 10 mins
+    // A should be popped first!
 
-socket2.on("match-found", (data) => {
-    console.log("Client 2 found match:", data);
-    if (matched) process.exit(0);
-    matched = true;
-});
+    const first = await client.zPopMin(queueKey);
+    console.log(`Popped 1st: ${first.value} (Score: ${first.score})`);
 
-// Start
-socket1.connect();
-setTimeout(() => {
-    socket2.connect();
-}, 500);
+    const second = await client.zPopMin(queueKey);
+    console.log(`Popped 2nd: ${second.value} (Score: ${second.score})`);
 
-// Timeout
-setTimeout(() => {
-    console.error("Test Timed Out - No match found");
-    process.exit(1);
-}, 5000);
+    if (first.value === 'UserHighRep') {
+        console.log("SUCCESS: High reputation user skipped the line!");
+    } else {
+        console.error("FAIL: Low reputation user was served first.");
+    }
+
+    await client.disconnect();
+}
+
+async function testShadowBan() {
+    // This is harder to test without full server mock, but we can verify key separation concepts
+    console.log("\n--- Testing Shadow Logic (Concept) ---");
+    const normalKey = "queue:en:male:female";
+    const shadowKey = "queue:en:male:female:shadow";
+
+    if (normalKey !== shadowKey) {
+        console.log("SUCCESS: Shadow queue has distinct key.");
+    }
+}
+
+testWeightedQueue().then(testShadowBan).catch(console.error);

@@ -39,6 +39,10 @@ module.exports = (env, argv) => {
                 {
                     test: /\.css$/,
                     use: ['style-loader', 'css-loader']
+                },
+                {
+                    test: /\.(png|jpe?g|gif|svg)$/i,
+                    type: 'asset/resource'
                 }
             ]
         },
@@ -67,7 +71,27 @@ module.exports = (env, argv) => {
         },
         optimization: {
             splitChunks: {
-                chunks: 'all', // Split all chunks (async and initial)
+                chunks: 'all',
+                cacheGroups: {
+                    // Separate TensorFlow.js into its own chunk
+                    tensorflow: {
+                        test: /[\\/]node_modules[\\/]@tensorflow[\\/]/,
+                        priority: 20,
+                        reuseExistingChunk: true,
+                    },
+                    // Separate NSFWJS into its own chunk
+                    nsfwjs: {
+                        test: /[\\/]node_modules[\\/]nsfwjs[\\/]/,
+                        priority: 20,
+                        reuseExistingChunk: true,
+                    },
+                    // Other vendor code
+                    vendors: {
+                        test: /[\\/]node_modules[\\/]/,
+                        priority: 10,
+                        reuseExistingChunk: true,
+                    },
+                },
             },
         },
         devServer: {
@@ -79,9 +103,9 @@ module.exports = (env, argv) => {
             open: false // Do not open browser automatically
         },
         performance: {
-            hints: isProduction ? 'warning' : false, // Disable hints in dev
-            maxEntrypointSize: 512000,
-            maxAssetSize: 512000
+            hints: isProduction ? 'warning' : false,
+            maxEntrypointSize: 800000,  // 800 KB - realistic for app without ML
+            maxAssetSize: 6000000  // 6 MB - allow ML libraries as separate chunks
         }
     };
 };

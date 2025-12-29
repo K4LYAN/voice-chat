@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import SimplePeer from 'simple-peer';
 
-export const useWebRTC = (socket) => {
+export const useWebRTC = (socket, onMessage) => {
     const [myStream, setMyStream] = useState(null);
     const [partnerStream, setPartnerStream] = useState(null);
 
@@ -10,16 +10,56 @@ export const useWebRTC = (socket) => {
     const connectionRef = useRef();
     const signalQueue = useRef([]);
 
-    // Media handling
-    const getMedia = async () => {
+    // Media handling - Start with audio only
+    const getMedia = async (includeVideo = false) => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: includeVideo,
+                audio: true
+            });
             setMyStream(stream);
             if (myVideoRef.current) myVideoRef.current.srcObject = stream;
             return stream;
         } catch (err) {
             console.error('Error accessing media:', err);
-            alert('Could not access Camera/Microphone. Please allow permissions.');
+            const mediaType = includeVideo ? 'Camera/Microphone' : 'Microphone';
+            alert(`Could not access ${mediaType}. Please allow permissions.`);
+            return null;
+        }
+    };
+
+    // Enable video on existing stream
+    const enableVideo = async () => {
+        try {
+            // Stop current stream
+            if (myStream) {
+                myStream.getTracks().forEach(track => track.stop());
+            }
+
+            // Get new stream with video
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
+            setMyStream(stream);
+            if (myVideoRef.current) myVideoRef.current.srcObject = stream;
+
+            // Update peer connection with new stream
+            if (connectionRef.current) {
+                const videoTrack = stream.getVideoTracks()[0];
+                const sender = connectionRef.current._pc.getSenders().find(s => s.track?.kind === 'video');
+
+                if (sender) {
+                    await sender.replaceTrack(videoTrack);
+                } else {
+                    connectionRef.current.addTrack(videoTrack, stream);
+                }
+            }
+
+            return stream;
+        } catch (err) {
+            console.error('Error enabling video:', err);
+            alert('Could not access Camera. Please allow camera permissions.');
             return null;
         }
     };
@@ -30,6 +70,17 @@ export const useWebRTC = (socket) => {
             setMyStream(null);
         }
     };
+
+    // Sending Data (E2E Encrypted Text)
+    const sendMessage = useCallback((text) => {
+        if (connectionRef.current) {
+            try {
+                connectionRef.current.send(text);
+            } catch (err) {
+                console.error('Error sending P2P message:', err);
+            }
+        }
+    }, []);
 
     // Helper to handle incoming signals
     const handleIncomingSignal = useCallback((payload) => {
@@ -78,6 +129,12 @@ export const useWebRTC = (socket) => {
             peer.on('stream', (stream) => {
                 setPartnerStream(stream);
                 if (partnerVideoRef.current) partnerVideoRef.current.srcObject = stream;
+            });
+
+            // 🔒 E2EE Message Listener
+            peer.on('data', (data) => {
+                const message = new TextDecoder().decode(data);
+                if (onMessage) onMessage(message);
             });
 
             peer.on('close', () => {
@@ -141,6 +198,9 @@ export const useWebRTC = (socket) => {
         myVideoRef,
         partnerVideoRef,
         initializePeer,
-        endCall
+        endCall,
+        getMedia,
+        enableVideo, // Expose video enabling function
+        sendMessage // Expose P2P send
     };
 };
