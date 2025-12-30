@@ -7,6 +7,8 @@ const os = require('os');
 const { Server } = require('socket.io');
 const { createClient } = require('redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
+const { createClient: createClientRedis } = require('redis'); // Renamed to avoid config
+const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -106,6 +108,45 @@ const activeConnections = new Map(); // socketId -> { ip, deviceHash, connectedA
 
 const numCPUs = process.env.WEB_CONCURRENCY || 1; // Default to 1 worker for free/shared tiers to avoid OOM
 
+// --- SUPABASE SETUP ---
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+    supabase = createSupabaseClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+    console.log('✅ Supabase Client Initialized');
+} else {
+    console.warn('⚠️ Supabase credentials missing. Bans will NOT be persistent.');
+}
+
+// --- BAN SYSTEM STORE ---
+// In-memory cache for fast lookups, synced with DB
+const blockedUsersCache = new Map(); // Key: IP or DeviceHash -> { reason, expiresAt, severity }
+const reportedUsers = new Map(); // socketId -> { reports: [], count: 0 }
+
+const loadBlockedList = async () => {
+    if (!supabase) return;
+    try {
+        const { data, error } = await supabase.from('blocked_users').select('*');
+        if (error) throw error;
+
+        blockedUsersCache.clear();
+        const now = new Date();
+        data.forEach(ban => {
+            const expiresAt = ban.expires_at ? new Date(ban.expires_at) : null;
+            if (!expiresAt || expiresAt > now) {
+                // Determine key (IP or DeviceHash)
+                if (ban.ip) blockedUsersCache.set(ban.ip, { ...ban, type: 'ip', expiresAt });
+                if (ban.device_hash) blockedUsersCache.set(ban.device_hash, { ...ban, type: 'device', expiresAt });
+            }
+        });
+        console.log(`Loaded ${blockedUsersCache.size} active bans from Supabase`);
+    } catch (err) {
+        console.error('Failed to load bans:', err.message);
+    }
+};
+
+// Initial Load
+loadBlockedList();
+
 // Clustering only works in production (nodemon breaks it in dev)
 if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     console.log(`Primary ${process.pid} is running`);
@@ -192,38 +233,77 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
     });
 
     // --- Admin Block Management Endpoints ---
-    app.post('/admin/block/ip/:ip', requireAdmin, express.json(), (req, res) => {
+    app.post('/admin/block/ip/:ip', requireAdmin, express.json(), async (req, res) => {
         const { ip } = req.params;
-        blockedIps.add(ip);
+        const reason = req.body.reason || 'Admin Manual Block';
+        const severity = req.body.severity || 'level2'; // Default: Permanent
+
+        // Cache Update
+        blockedUsersCache.set(ip, { reason, severity, expiresAt: null, type: 'ip' });
+
+        // DB Update
+        if (supabase) {
+            await supabase.from('blocked_users').insert([{
+                ip: ip,
+                reason,
+                severity,
+                expires_at: null
+            }]);
+        }
+
         log.warn(`IP blocked: ${ip}`);
         res.json({ success: true, message: `IP ${ip} blocked` });
     });
 
-    app.delete('/admin/block/ip/:ip', requireAdmin, (req, res) => {
+    app.delete('/admin/block/ip/:ip', requireAdmin, async (req, res) => {
         const { ip } = req.params;
-        blockedIps.delete(ip);
+        blockedUsersCache.delete(ip);
+        if (supabase) {
+            await supabase.from('blocked_users').delete().eq('ip', ip);
+        }
         log.info(`IP unblocked: ${ip}`);
         res.json({ success: true, message: `IP ${ip} unblocked` });
     });
 
-    app.post('/admin/block/device/:hash', requireAdmin, express.json(), (req, res) => {
+    app.post('/admin/block/device/:hash', requireAdmin, express.json(), async (req, res) => {
         const { hash } = req.params;
-        blockedDevices.add(hash);
+        const reason = req.body.reason || 'Admin Manual Block';
+        const severity = req.body.severity || 'level2'; // Default: Permanent
+
+        // Cache Update
+        blockedUsersCache.set(hash, { reason, severity, expiresAt: null, type: 'device' });
+
+        // DB Update
+        if (supabase) {
+            await supabase.from('blocked_users').insert([{
+                device_hash: hash,
+                reason,
+                severity,
+                expires_at: null // Permanent
+            }]);
+        }
+
         log.warn(`Device blocked: ${hash}`);
-        res.json({ success: true, message: `Device ${hash} blocked` });
+        res.json({ success: true, message: `Device ${hash} permanently blocked` });
     });
 
-    app.delete('/admin/block/device/:hash', requireAdmin, (req, res) => {
+    app.delete('/admin/block/device/:hash', requireAdmin, async (req, res) => {
         const { hash } = req.params;
-        blockedDevices.delete(hash);
+        blockedUsersCache.delete(hash);
+        if (supabase) {
+            await supabase.from('blocked_users').delete().eq('device_hash', hash);
+        }
         log.info(`Device unblocked: ${hash}`);
         res.json({ success: true, message: `Device ${hash} unblocked` });
     });
 
     app.get('/admin/blocked', requireAdmin, (req, res) => {
+        const blockedList = Array.from(blockedUsersCache.entries()).map(([key, val]) => ({
+            key, ...val
+        }));
         res.json({
-            blockedIps: Array.from(blockedIps),
-            blockedDevices: Array.from(blockedDevices),
+            blocked: blockedList,
+            total: blockedList.length
         });
     });
 
@@ -275,6 +355,29 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
         });
         queueStats.users.sort((a, b) => b.waitingTime - a.waitingTime);
         res.json(queueStats);
+        queueStats.users.sort((a, b) => b.waitingTime - a.waitingTime);
+        res.json(queueStats);
+    });
+
+    // --- Reports Management ---
+    app.get('/admin/reports', requireAdmin, (req, res) => {
+        const reportsList = Array.from(reportedUsers.entries()).map(([hash, data]) => ({
+            hash,
+            ...data
+        }));
+        // Sort by report count descending
+        reportsList.sort((a, b) => b.count - a.count);
+        res.json({ reports: reportsList });
+    });
+
+    app.delete('/admin/reports/:hash', requireAdmin, (req, res) => {
+        const { hash } = req.params;
+        if (reportedUsers.has(hash)) {
+            reportedUsers.delete(hash);
+            res.json({ success: true, message: 'Reports cleared' });
+        } else {
+            res.status(404).json({ error: 'Report not found' });
+        }
     });
 
     // --- Match History Logs ---
@@ -421,32 +524,37 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
         const ip = socket.handshake.headers['x-forwarded-for']?.split(',')[0].trim() || socket.handshake.address;
         const deviceHash = socket.handshake.auth?.deviceHash || socket.handshake.query?.deviceHash;
 
-        if (blockedIps.has(ip)) {
-            log.warn(`Blocked connection attempt from IP: ${ip}`);
+        // Check Cache for bans
+        const checkBan = (key) => {
+            const ban = blockedUsersCache.get(key);
+            if (!ban) return null;
+
+            // Check Expiry (if temp ban)
+            if (ban.expiresAt && new Date(ban.expiresAt) < new Date()) {
+                blockedUsersCache.delete(key); // Expired
+                return null;
+            }
+            return ban;
+        };
+
+        const ipBan = checkBan(ip);
+        const deviceBan = checkBan(deviceHash);
+
+        // Check if blocked (Ignore 'warning' severity which is just for logging/display)
+        if ((ipBan && ipBan.severity !== 'warning') || (deviceBan && deviceBan.severity !== 'warning')) {
+            const ban = ipBan || deviceBan;
+            log.warn(`Blocked connection attempt from ${ip} (${ban.reason})`);
             blockedConnectionsCounter.inc();
-            // Log the attempt for real-time dashboard
+
             blockedAttempts.unshift({
                 timestamp: new Date().toISOString(),
                 ip,
                 deviceHash: deviceHash || 'N/A',
-                reason: 'IP Blocked'
+                reason: `${ban.severity === 'level1' ? 'Temp' : 'Perm'} Ban: ${ban.reason}`
             });
             if (blockedAttempts.length > MAX_BLOCKED_ATTEMPTS) blockedAttempts.pop();
-            return next(new Error('Connection refused'));
-        }
 
-        if (deviceHash && blockedDevices.has(deviceHash)) {
-            log.warn(`Blocked connection attempt from device: ${deviceHash}`);
-            blockedConnectionsCounter.inc();
-            // Log the attempt for real-time dashboard
-            blockedAttempts.unshift({
-                timestamp: new Date().toISOString(),
-                ip,
-                deviceHash,
-                reason: 'Device Blocked'
-            });
-            if (blockedAttempts.length > MAX_BLOCKED_ATTEMPTS) blockedAttempts.pop();
-            return next(new Error('Connection refused'));
+            return next(new Error(`Banned: ${ban.reason}`));
         }
 
         // Attach IP and deviceHash to socket for later use
@@ -567,9 +675,9 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
 
             if (redisConfig) {
                 console.log('Attempting Redis connection...');
-                const tempPub = createClient(redisConfig);
+                const tempPub = createClientRedis(redisConfig);
                 const tempSub = tempPub.duplicate();
-                const tempDb = createClient(redisConfig);
+                const tempDb = createClientRedis(redisConfig);
 
                 // Add error handlers to prevent crash during connect
                 const ignoreErr = (err) => { };
@@ -751,6 +859,70 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                     handler(...args);
                 };
             };
+
+            // --- REPORT & AUTO-BAN LOGIC ---
+            const handleUserReport = async (reporterSocket, targetSocketId, reason) => {
+                // Prevent self-report abuse
+                if (reporterSocket.id === targetSocketId) return;
+
+                const targetSocket = io.sockets.sockets.get(targetSocketId);
+                if (!targetSocket) return; // User already left?
+
+                // Track Reports
+                if (!reportedUsers.has(targetSocket.deviceHash)) {
+                    reportedUsers.set(targetSocket.deviceHash, { reports: [], count: 0 });
+                }
+
+                const entry = reportedUsers.get(targetSocket.deviceHash);
+                entry.count++;
+                entry.reports.push({
+                    reporter: reporterSocket.deviceHash,
+                    reason,
+                    timestamp: Date.now()
+                });
+
+                log.warn(`User ${targetSocketId} reported for ${reason}. Total: ${entry.count}`);
+
+                // --- AUTO-BAN THRESHOLD ---
+                // 3 Reports in 10 minutes -> Level 1 (Temp Class)
+                // 5 Reports in 1 hour -> Level 2 (Perm Ban)
+
+                if (entry.count >= 3) {
+                    const severity = entry.count >= 5 ? 'level2' : 'level1';
+                    const banReason = `Auto-Ban: Excessive Reports (${entry.count})`;
+                    const expiresAt = severity === 'level1'
+                        ? new Date(Date.now() + 5 * 60 * 1000) // 5 Min
+                        : null; // Permanent
+
+                    // Apply Ban
+                    blockedUsersCache.set(targetSocket.clientIp, { reason: banReason, severity, expiresAt, type: 'ip' });
+                    if (targetSocket.deviceHash) {
+                        blockedUsersCache.set(targetSocket.deviceHash, { reason: banReason, severity, expiresAt, type: 'device' });
+                    }
+
+                    // Record DB
+                    if (supabase) {
+                        await supabase.from('blocked_users').insert([{
+                            ip: targetSocket.clientIp,
+                            device_hash: targetSocket.deviceHash,
+                            reason: banReason,
+                            severity,
+                            expires_at: expiresAt
+                        }]);
+                    }
+
+                    // Force Disconnect
+                    targetSocket.disconnect(true);
+                    log.warn(`Auto-Banned User ${targetSocket.id} [${severity}]`);
+
+                    // Reset Reports after ban to avoid double-banning immediately upon return (if temp)
+                    if (severity === 'level2') reportedUsers.delete(targetSocket.deviceHash);
+                }
+            };
+
+            socket.on('report-user', ({ targetId, reason }) => {
+                handleUserReport(socket, targetId, reason);
+            });
 
             // ===== ENHANCED MATCHING SYSTEM =====
 
@@ -1278,6 +1450,66 @@ if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
                     // TODO: Persist IP in session for offline reporting
                     console.warn("Target socket not found, cannot penalize reputation immediately.");
                 }
+            }));
+
+            // --- Warning System ---
+            socket.on('nsfw_warning', withRateLimit(async () => {
+                const ip = getClientIp(socket);
+                const deviceHash = socket.handshake.auth.deviceHash;
+                const reason = 'NSFW Warning (First Strike)';
+                const severity = 'warning';
+
+                console.warn(`[NSFW WARNING] User ${socket.id} (IP: ${ip}) flagged.`);
+
+                // Cache Warning
+                if (ip) blockedUsersCache.set(ip, { reason, severity, expiresAt: null, type: 'ip' });
+                if (deviceHash) blockedUsersCache.set(deviceHash, { reason, severity, expiresAt: null, type: 'device' });
+
+                // Persist Warning
+                if (supabase) {
+                    const bans = [];
+                    if (ip) bans.push({ ip, reason, severity, expires_at: null });
+                    if (deviceHash) bans.push({ device_hash: deviceHash, reason, severity, expires_at: null });
+                    await supabase.from('blocked_users').insert(bans).then(({ error }) => {
+                        if (error) console.error('Supabase warning insert error:', error);
+                    });
+                }
+            }));
+
+            // --- NSFW Enforcement ---
+            socket.on('nsfw_detected', withRateLimit(async () => {
+                const ip = getClientIp(socket);
+                const deviceHash = socket.handshake.auth.deviceHash;
+
+                console.warn(`[NSFW DETECTED] User ${socket.id} (IP: ${ip}) emitted self-violation.`);
+
+                // 1. Log to Database (as a self-report/auto-ban)
+                const reason = 'NSFW Content Detected (Auto-Moderation)';
+                const severity = 'level2'; // Permanent Ban
+
+                // 2. Add to Cache
+                if (ip) blockedUsersCache.set(ip, { reason, severity, expiresAt: null, type: 'ip' });
+                if (deviceHash) blockedUsersCache.set(deviceHash, { reason, severity, expiresAt: null, type: 'device' });
+
+                // 3. Persist to Supabase
+                if (supabase) {
+                    const bans = [];
+                    if (ip) bans.push({ ip, reason, severity, expires_at: null });
+                    if (deviceHash) bans.push({ device_hash: deviceHash, reason, severity, expires_at: null });
+
+                    if (bans.length > 0) {
+                        try {
+                            const { error } = await supabase.from('blocked_users').insert(bans);
+                            if (error) console.error('Supabase ban insert error:', error);
+                        } catch (err) {
+                            console.error('Supabase error:', err);
+                        }
+                    }
+                }
+
+                // 4. Terminate Connection
+                socket.emit('banned', { reason: 'Inappropriate content detected.' });
+                socket.disconnect(true);
             }));
 
             socket.on('disconnect', async () => {

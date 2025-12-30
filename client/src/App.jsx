@@ -1,23 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import io from 'socket.io-client';
 import './App.css';
 import Navbar from './components/Navbar';
 import LandingView from './components/LandingView';
-import SearchingView from './components/SearchingView';
+// SearchingView import removed
 import ChatSession from './components/ChatSession';
-import AdminDashboard from './components/AdminDashboard';
 import { useWebRTC } from './hooks/useWebRTC';
+import { getSocketUrl } from './constants';
+
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 
 // Socket.io connection setup
-const getSocketUrl = () => {
-  if (process.env.SERVER_URL) return process.env.SERVER_URL;
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return `${window.location.protocol}//${window.location.hostname}:5000`;
-  }
-  return 'https://voice-chat-0dnh.onrender.com';
-};
-
 const SOCKET_URL = getSocketUrl();
 
 // Generate or retrieve a unique device hash for blocking identification
@@ -41,31 +35,6 @@ const socket = io(SOCKET_URL, {
   }
 });
 
-const LANGUAGE_DATA = [
-  { code: 'English', name: 'English', native: 'English', loc: 'en' },
-  { code: 'Spanish', name: 'Spanish', native: 'Español', loc: 'es' },
-  { code: 'Hindi', name: 'Hindi', native: 'हिन्दी', loc: 'hi' },
-  { code: 'Bengali', name: 'Bengali', native: 'বাংলা', loc: 'bn' },
-  { code: 'Marathi', name: 'Marathi', native: 'मराठी', loc: 'mr' },
-  { code: 'Telugu', name: 'Telugu', native: 'తెలుగు', loc: 'te' },
-  { code: 'Tamil', name: 'Tamil', native: 'தமிழ்', loc: 'ta' },
-  { code: 'Gujarati', name: 'Gujarati', native: 'ગુજરાતી', loc: 'gu' },
-  { code: 'Kannada', name: 'Kannada', native: 'ಕನ್ನಡ', loc: 'kn' },
-  { code: 'Malayalam', name: 'Malayalam', native: 'മലയാളം', loc: 'ml' },
-  { code: 'Punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', loc: 'pa' },
-  { code: 'Odia', name: 'Odia', native: 'ଓଡ଼ିଆ', loc: 'or' },
-  { code: 'Assamese', name: 'Assamese', native: 'অসমীয়া', loc: 'as' },
-  { code: 'Urdu', name: 'Urdu', native: 'اردو', loc: 'ur' },
-  { code: 'French', name: 'French', native: 'Français', loc: 'fr' },
-  { code: 'German', name: 'German', native: 'Deutsch', loc: 'de' },
-  { code: 'Portuguese', name: 'Portuguese', native: 'Português', loc: 'pt' },
-  { code: 'Russian', name: 'Russian', native: 'Русский', loc: 'ru' },
-  { code: 'Japanese', name: 'Japanese', native: '日本語', loc: 'ja' },
-  { code: 'Chinese', name: 'Chinese', native: '中文', loc: 'zh' },
-  { code: 'Arabic', name: 'Arabic', native: 'العربية', loc: 'ar' },
-  { code: 'Indonesian', name: 'Indonesian', native: 'Bahasa', loc: 'id' },
-];
-
 function App() {
   // Check if admin route
   const [isAdmin, setIsAdmin] = useState(window.location.hash === '#admin');
@@ -81,13 +50,18 @@ function App() {
 
   // If admin route, show admin dashboard
   if (isAdmin) {
-    return <AdminDashboard />;
+    return (
+      <Suspense fallback={<div className="loading-spinner">Loading Admin...</div>}>
+        <AdminDashboard />
+      </Suspense>
+    );
   }
 
   // State
   const [step, setStep] = useState('LANDING'); // LANDING, SEARCHING, CHATTING
   const [language, setLanguage] = useState('Global'); // Default to Global
   const [roomId, setRoomId] = useState(null);
+  const [partnerSocketId, setPartnerSocketId] = useState(null); // Track partner for reporting
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -128,6 +102,7 @@ function App() {
   const endCall = useCallback((keepMedia = false) => {
     setStep('LANDING');
     setRoomId(null);
+    setPartnerSocketId(null);
     setMessages([]);
     setVideoEnabled(false); // Reset video state
     endCallRTC(keepMedia); // Delegated to hook
@@ -141,6 +116,7 @@ function App() {
 
     socket.on('match-found', ({ roomId: assignedRoomId, initiator, partnerId }) => {
       setRoomId(assignedRoomId);
+      setPartnerSocketId(partnerId);
       setStep('CHATTING');
       initializePeer(initiator === socket.id, partnerId);
     });
@@ -149,6 +125,7 @@ function App() {
       // Automatically search for next partner instead of ending
       setMessages([]); // Clear previous chat
       setRoomId(null);
+      setPartnerSocketId(null);
       endCallRTC(true); // Keep media active
 
       // Rejoin queue with same language
@@ -230,13 +207,19 @@ function App() {
     setStep('LANDING');
   }, []);
 
+  const handleReportUser = useCallback((reason) => {
+    if (partnerSocketId) {
+      socket.emit('report-user', { targetId: partnerSocketId, reason });
+    }
+  }, [partnerSocketId]);
+
   return (
     <div className="app-container">
       <Navbar
         isConnected={isConnected}
       />
       <AnimatePresence mode="wait">
-        {step === 'LANDING' && (
+        {step === 'LANDING' ? (
           <LandingView
             key="landing"
             onQuickStart={handleQuickStart}
@@ -248,26 +231,14 @@ function App() {
             interests={interests}
             onInterestsChange={setInterests}
           />
-        )}
-
-        {step === 'SEARCHING' && (
-          <SearchingView
-            key="searching"
-            language="Global"
-            onCancel={leaveQueue}
-            onSearchGlobal={handleQuickStart} // Re-use simplified join
-            myStream={myStream} // Pass stream for self-view
-          />
-        )}
-
-        {step === 'CHATTING' && (
+        ) : (
           <ChatSession
             key="chat"
             messages={messages}
             onSendMessage={sendMessage}
             myVideoRef={myVideoRef}
             partnerVideoRef={partnerVideoRef}
-            myStream={myStream} // Pass local stream
+            myStream={myStream}
             partnerStream={partnerStream}
             nextPartner={nextPartner}
             endCall={endCall}
@@ -276,10 +247,18 @@ function App() {
             language="Global"
             onGenderChange={setGender}
             onPreferredGenderChange={setPreferredGender}
-            onLanguageChange={() => { }} // No-op
-            languages={[]} // Empty
+            onLanguageChange={() => { }}
+            languages={[]}
             videoEnabled={videoEnabled}
             onEnableVideo={handleEnableVideo}
+            onReport={handleReportUser}
+            onNSFWDetected={(isWarning) => {
+              if (isWarning) socket.emit('nsfw_warning');
+              else socket.emit('nsfw_detected');
+            }}
+            /* Connect search functionality directly */
+            isSearching={step === 'SEARCHING'}
+            onStartSearch={() => joinQueue('global', gender, preferredGender)}
           />
         )}
       </AnimatePresence>

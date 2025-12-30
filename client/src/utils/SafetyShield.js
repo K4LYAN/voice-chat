@@ -3,8 +3,9 @@ let tf = null;
 let nsfwjs = null;
 
 class SafetyShield {
-    constructor(videoElementId) {
+    constructor(videoElementId, onViolation = null) {
         this.videoElementId = videoElementId;
+        this.onViolation = onViolation;
         this.videoElement = null;
         this.model = null;
 
@@ -276,6 +277,11 @@ class SafetyShield {
         this.videoElement.style.filter = 'blur(30px)';
         this.createOverlay();
         this.isBlurred = true;
+
+        // Trigger external violation handler (e.g., stop transmission, emit socket event)
+        if (this.onViolation) {
+            this.onViolation();
+        }
         // console.log('SafetyShield: BLOCKED');
     }
 

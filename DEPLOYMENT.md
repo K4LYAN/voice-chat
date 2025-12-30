@@ -39,12 +39,30 @@ This guide will help you deploy the Voice Chat application for free using **Rend
             - `REDIS_HOST`: `redis-19021.c266.us-east-1-3.ec2.cloud.redislabs.com`
             - `REDIS_PORT`: `19021`
             - `REDIS_PASSWORD`: `FkUVcI6GC38d3ZfsaybgMK9tqiGW8ze6`
+        - **Supabase (Required for Bans)**: Use your Supabase credentials.
+            - `SUPABASE_URL`: `https://xyz.supabase.co`
+            - `SUPABASE_KEY`: `your-anon-key`
         - Add `NODE_VERSION`: `18.17.0`
         - Add `WEB_CONCURRENCY`: `1` (Ensures server stability on free tier)
     - Click **Create Web Service**.
 
-4.  **Wait for Deploy**: Even if it says "Live", it might take a minute.
-5.  **Copy Backend URL**: Once deployed, copy the URL (e.g., `https://voice-chat-backend.onrender.com`). You will need this for the frontend.
+4.  **Supabase Database Setup**:
+    - Go to [Supabase SQL Editor](https://supabase.com/dashboard).
+    - Run the following SQL to create the ban table:
+      ```sql
+      create table blocked_users (
+        id bigint generated always as identity primary key,
+        ip text,
+        device_hash text,
+        reason text,
+        severity text, 
+        expires_at timestamp with time zone,
+        created_at timestamp with time zone default now()
+      );
+      ```
+
+5.  **Wait for Deploy**: Even if it says "Live", it might take a minute.
+6.  **Copy Backend URL**: Once deployed, copy the URL (e.g., `https://voice-chat-backend.onrender.com`). You will need this for the frontend.
 
 ---
 

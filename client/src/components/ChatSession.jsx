@@ -27,12 +27,15 @@ const ChatSession = ({
     nextPartner,
     endCall,
     videoEnabled,
-    onEnableVideo
+    onEnableVideo,
+    onReport, // Received from App.jsx
+    onNSFWDetected // Callback for local NSFW detection
 }) => {
     const [inputMsg, setInputMsg] = useState('');
     const messagesEndRef = useRef(null);
     const [isMobile, setIsMobile] = useState(false);
     const [showGenderModal, setShowGenderModal] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth <= 900);
@@ -79,12 +82,46 @@ const ChatSession = ({
         };
     }, [partnerStream, partnerVideoRef]);
 
-    // Attach local video stream
+    // Attach local video stream & Start NSFW Moderation
     useEffect(() => {
         if (myVideoRef.current && myStream) {
             myVideoRef.current.srcObject = myStream;
             myVideoRef.current.muted = true;
         }
+
+        let localShield = null;
+        if (myStream && myVideoRef.current) {
+            let violationCount = 0;
+
+            // Callback when NSFW content is detected locally
+            const handleNSFWViolation = () => {
+                violationCount++;
+                console.warn(`NSFW Strike ${violationCount}`);
+
+                if (violationCount === 1) {
+                    // STRIKE 1: WARNING
+                    if (onNSFWDetected) onNSFWDetected(true); // true = isWarning
+                    alert("⚠️ WARNING: Inappropriate content detected.\n\nThis is your ONLY warning. If detected again, you will be permanently banned.");
+                } else if (violationCount >= 2) {
+                    // STRIKE 2: INSTANT BAN
+                    console.warn("CRITICAL: Repeated NSFW Content! Banning.");
+                    const videoTrack = myStream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        videoTrack.enabled = false;
+                        videoTrack.stop();
+                    }
+                    if (onNSFWDetected) onNSFWDetected(false); // false = isWarning (BAN)
+                    alert("⛔ ACCOUNT BANNED: Repeated inappropriate content detected.");
+                }
+            };
+
+            localShield = new SafetyShield(myVideoRef.current, handleNSFWViolation);
+            localShield.init();
+        }
+
+        return () => {
+            if (localShield) localShield.stop();
+        };
     }, [myStream, myVideoRef]);
 
     // Auto-scroll messages
@@ -151,16 +188,26 @@ const ChatSession = ({
                 exit={{ opacity: 0, x: -100 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
-                {/* Swipe Indicator - Removed for cleaner UI */}
-
                 {/* Video Section */}
                 <div className="video-section">
                     <div className="video-full">
                         <video ref={partnerVideoRef} autoPlay playsInline />
                     </div>
 
-                    {/* Session Controls - Skip and Enable Video */}
+                    {/* Session Controls */}
                     <div className="session-controls">
+                        <button
+                            className="btn-control danger"
+                            onClick={() => setShowReportModal(true)}
+                            title="Report User"
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M12 16H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </button>
+
                         {!videoEnabled && (
                             <button
                                 className="btn-control btn-enable-video"
@@ -200,7 +247,7 @@ const ChatSession = ({
                 </div>
             </motion.div>
 
-            {/* Chat Sheet - Outside swipe wrapper so it stays in place */}
+            {/* Chat Sheet */}
             <div className="chat-sheet">
                 <div className="chat-messages">
                     <AnimatePresence initial={false}>
@@ -234,7 +281,38 @@ const ChatSession = ({
                 </div>
             </div>
 
-            {/* Gender Selection Modal */}
+            {/* Modals */}
+            <AnimatePresence>
+                {showReportModal && (
+                    <div className="modal-overlay">
+                        <motion.div
+                            className="modal-glass"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                        >
+                            <h3>⚠️ Report User</h3>
+                            <div className="report-options">
+                                {['Inappropriate Behavior', 'Spam / Scam', 'Abusive Language', 'Underage'].map(reason => (
+                                    <button
+                                        key={reason}
+                                        className="btn-report-option"
+                                        onClick={() => {
+                                            if (onReport) onReport(reason);
+                                            setShowReportModal(false);
+                                            alert('User Reported. Thank you for keeping the community safe.');
+                                        }}
+                                    >
+                                        {reason}
+                                    </button>
+                                ))}
+                            </div>
+                            <button className="btn-text" onClick={() => setShowReportModal(false)}>Cancel</button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
             {showGenderModal && (
                 <GenderSelectionModal
                     onSelect={handleGenderSelect}

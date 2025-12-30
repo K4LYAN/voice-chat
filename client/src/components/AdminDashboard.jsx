@@ -24,7 +24,7 @@ function AdminDashboard() {
     const [health, setHealth] = useState(null);
     const [connections, setConnections] = useState([]);
     const [queueStats, setQueueStats] = useState({ total: 0, byGender: {}, users: [] });
-    const [blocked, setBlocked] = useState({ blockedIps: [], blockedDevices: [] });
+    const [blocked, setBlocked] = useState({ blocked: [], total: 0 });
     const [blockedAttempts, setBlockedAttempts] = useState([]);
     const [matchLogs, setMatchLogs] = useState([]);
 
@@ -169,6 +169,35 @@ function AdminDashboard() {
             alert(`Export failed: ${err.message}`);
         }
     };
+
+    const fetchReports = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/admin/reports`, { headers: { 'x-admin-password': password } });
+            const data = await res.json();
+            setReports(data.reports || []);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const dismissReport = async (hash) => {
+        if (!confirm('Are you sure you want to dismiss all reports for this user?')) return;
+        try {
+            await fetch(`${API_BASE}/admin/reports/${hash}`, {
+                method: 'DELETE',
+                headers: { 'x-admin-password': password }
+            });
+            fetchReports(); // Refresh list
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    // Auto-fetch view specific data
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        if (activeView === 'reports') fetchReports();
+    }, [activeView, isAuthenticated, password]);
 
     const blockIp = async () => {
         if (!newBlockIp.trim()) return;
@@ -736,8 +765,8 @@ function AdminDashboard() {
                                     <div className="card-header">
                                         <h3 className="card-title">
                                             <span className="card-title-icon">🚫</span>
-                                            Blocked IP Addresses
-                                            <span className="card-count">({blocked.blockedIps.length})</span>
+                                            Blocked IP Logs
+                                            <span className="card-count">({blocked.blocked?.filter(b => b.type === 'ip').length})</span>
                                         </h3>
                                     </div>
                                     <div className="card-body">
@@ -755,29 +784,53 @@ function AdminDashboard() {
                                                     🚫 Block IP
                                                 </button>
                                             </div>
-                                            <p className="form-helper">Block suspicious or malicious IP addresses</p>
+                                            <p className="form-helper">Manually blocked IPs are permanent by default.</p>
                                         </div>
 
-                                        <div className="blocked-list">
-                                            {blocked.blockedIps.map((ip) => (
-                                                <div key={ip} className="blocked-item">
-                                                    <span className="blocked-value">{ip}</span>
-                                                    <button
-                                                        className="btn btn-secondary btn-sm"
-                                                        onClick={() => unblockIp(ip)}
-                                                    >
-                                                        Unblock
-                                                    </button>
-                                                </div>
-                                            ))}
+                                        <div className="table-container">
+                                            <table className="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>IP Address</th>
+                                                        <th>Reason</th>
+                                                        <th>Severity</th>
+                                                        <th>Expires</th>
+                                                        <th className="text-right">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {blocked.blocked?.filter(b => b.type === 'ip').map((ban) => (
+                                                        <tr key={ban.key}>
+                                                            <td><span className="mono">{ban.key}</span></td>
+                                                            <td>{ban.reason || 'N/A'}</td>
+                                                            <td>
+                                                                <span className={`badge ${ban.severity === 'level2' ? 'badge-danger' : 'badge-warning'}`}>
+                                                                    {ban.severity === 'level2' ? 'Permanent' : 'Temporary'}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                {ban.expiresAt ? new Date(ban.expiresAt).toLocaleString() : 'Never'}
+                                                            </td>
+                                                            <td className="text-right">
+                                                                <button
+                                                                    className="btn btn-secondary btn-sm"
+                                                                    onClick={() => unblockIp(ban.key)}
+                                                                >
+                                                                    Unblock
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
 
-                                        {blocked.blockedIps.length === 0 && (
+                                        {(!blocked.blocked || blocked.blocked.filter(b => b.type === 'ip').length === 0) && (
                                             <div className="empty-state">
                                                 <div className="empty-icon">✅</div>
                                                 <div className="empty-title">No blocked IPs</div>
                                                 <div className="empty-description">
-                                                    IP addresses you block will appear here
+                                                    Blocked IP addresses will appear here
                                                 </div>
                                             </div>
                                         )}
@@ -798,18 +851,18 @@ function AdminDashboard() {
                                     <div className="card-header">
                                         <h3 className="card-title">
                                             <span className="card-title-icon">📱</span>
-                                            Blocked Device Hashes
-                                            <span className="card-count">({blocked.blockedDevices.length})</span>
+                                            Blocked Device Logs
+                                            <span className="card-count">({blocked.blocked?.filter(b => b.type === 'device').length})</span>
                                         </h3>
                                     </div>
                                     <div className="card-body">
                                         <div className="form-group">
-                                            <label className="form-label required">Block New Device</label>
+                                            <label className="form-label required">Block New Device Hash</label>
                                             <div className="input-group">
                                                 <input
                                                     type="text"
                                                     className="form-input"
-                                                    placeholder="Enter device hash"
+                                                    placeholder="Enter Device Hash"
                                                     value={newBlockDevice}
                                                     onChange={(e) => setNewBlockDevice(e.target.value)}
                                                 />
@@ -817,31 +870,57 @@ function AdminDashboard() {
                                                     🚫 Block Device
                                                 </button>
                                             </div>
-                                            <p className="form-helper">Block devices by their unique fingerprint hash</p>
+                                            <p className="form-helper">Permanently ban a specific device. Use with caution.</p>
                                         </div>
 
-                                        <div className="blocked-list">
-                                            {blocked.blockedDevices.map((hash) => (
-                                                <div key={hash} className="blocked-item">
-                                                    <span className="blocked-value" title={hash}>
-                                                        {hash.substring(0, 24)}...
-                                                    </span>
-                                                    <button
-                                                        className="btn btn-secondary btn-sm"
-                                                        onClick={() => unblockDevice(hash)}
-                                                    >
-                                                        Unblock
-                                                    </button>
-                                                </div>
-                                            ))}
+                                        <div className="table-container">
+                                            <table className="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Device Hash</th>
+                                                        <th>Reason</th>
+                                                        <th>Severity</th>
+                                                        <th>Expires</th>
+                                                        <th className="text-right">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {blocked.blocked?.filter(b => b.type === 'device').map((ban) => (
+                                                        <tr key={ban.key}>
+                                                            <td>
+                                                                <span className="mono table-cell-secondary" title={ban.key}>
+                                                                    {ban.key.substring(0, 16)}...
+                                                                </span>
+                                                            </td>
+                                                            <td>{ban.reason || 'N/A'}</td>
+                                                            <td>
+                                                                <span className={`badge ${ban.severity === 'level2' ? 'badge-danger' : 'badge-warning'}`}>
+                                                                    {ban.severity === 'level2' ? 'Permanent' : 'Temporary'}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                {ban.expiresAt ? new Date(ban.expiresAt).toLocaleString() : 'Never'}
+                                                            </td>
+                                                            <td className="text-right">
+                                                                <button
+                                                                    className="btn btn-secondary btn-sm"
+                                                                    onClick={() => unblockDevice(ban.key)}
+                                                                >
+                                                                    Unblock
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
 
-                                        {blocked.blockedDevices.length === 0 && (
+                                        {(!blocked.blocked || blocked.blocked.filter(b => b.type === 'device').length === 0) && (
                                             <div className="empty-state">
                                                 <div className="empty-icon">✅</div>
                                                 <div className="empty-title">No blocked devices</div>
                                                 <div className="empty-description">
-                                                    Blocked device hashes will appear here
+                                                    Blocked devices will appear here
                                                 </div>
                                             </div>
                                         )}
@@ -981,6 +1060,85 @@ function AdminDashboard() {
                                                 </div>
                                             </div>
                                         )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {activeView === 'reports' && (
+                            <motion.div
+                                key="reports"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                            >
+                                <div className="card">
+                                    <div className="card-header">
+                                        <h3 className="card-title">
+                                            <span className="card-title-icon">⚠️</span>
+                                            User Reports
+                                        </h3>
+                                        <button className="btn btn-secondary btn-sm" onClick={fetchReports}>
+                                            Refresh
+                                        </button>
+                                    </div>
+                                    <div className="table-container">
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Device Hash</th>
+                                                    <th>Reports</th>
+                                                    <th>Last Reason</th>
+                                                    <th>Last Reported</th>
+                                                    <th className="text-right">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {reports.length === 0 ? (
+                                                    <tr><td colSpan="5" className="text-center p-4 text-gray-400">No active reports.</td></tr>
+                                                ) : (
+                                                    reports.map((report) => (
+                                                        <tr key={report.hash}>
+                                                            <td><span className="mono">{report.hash.substring(0, 12)}...</span></td>
+                                                            <td>
+                                                                <span className={`badge ${report.count >= 3 ? 'badge-danger' : 'badge-warning'}`}>
+                                                                    {report.count}
+                                                                </span>
+                                                            </td>
+                                                            <td>{report.reports[report.reports.length - 1]?.reason}</td>
+                                                            <td className="text-sm text-gray-400">
+                                                                {new Date(report.reports[report.reports.length - 1]?.timestamp).toLocaleString()}
+                                                            </td>
+                                                            <td className="text-right space-x-2">
+                                                                <button
+                                                                    className="btn btn-secondary btn-sm"
+                                                                    onClick={() => dismissReport(report.hash)}
+                                                                >
+                                                                    Dismiss
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-danger btn-sm"
+                                                                    onClick={() => {
+                                                                        if (confirm('Permanently ban this user?')) {
+                                                                            const password = localStorage.getItem('admin_password');
+                                                                            fetch(`${API_BASE}/admin/block/device/${encodeURIComponent(report.hash)}`, {
+                                                                                method: 'POST',
+                                                                                headers: { 'x-admin-password': password }
+                                                                            }).then(() => {
+                                                                                alert('User Banned');
+                                                                                fetchReports();
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    Ban User
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </motion.div>

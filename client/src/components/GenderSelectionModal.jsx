@@ -1,12 +1,22 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { INTERESTS } from '../constants'; // Import shared constants
 
-const GenderSelectionModal = ({ onSelect, onCancel }) => {
-    const [myGender, setMyGender] = useState('male');
-    const [lookingFor, setLookingFor] = useState('female');
+const GenderSelectionModal = ({ onSelect, onCancel, initialGender = 'male', initialLookingFor = 'female', initialInterests = [] }) => {
+    const [myGender, setMyGender] = useState(initialGender);
+    const [lookingFor, setLookingFor] = useState(initialLookingFor);
+    const [selectedInterests, setSelectedInterests] = useState(initialInterests);
+
+    const toggleInterest = (id) => {
+        if (selectedInterests.includes(id)) {
+            setSelectedInterests(prev => prev.filter(i => i !== id));
+        } else {
+            setSelectedInterests(prev => [...prev, id]);
+        }
+    };
 
     const handleNext = () => {
-        onSelect(myGender, lookingFor);
+        onSelect(myGender, lookingFor, selectedInterests);
     };
 
     return (
@@ -26,86 +36,95 @@ const GenderSelectionModal = ({ onSelect, onCancel }) => {
                     exit={{ opacity: 0, scale: 0.9, y: 30 }}
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 >
+                    {/* Header */}
                     <div className="modal-header">
-                        <h2 className="gender-modal-title">Preferences</h2>
-                        <p className="gender-modal-subtitle">Customize your matching experience</p>
+                        <div className="gender-modal-drag-handle" style={{
+                            width: '48px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '4px', margin: '0 auto 24px', display: 'none'
+                        }}></div>
+                        <h2 className="gender-modal-title">Customize Match</h2>
+                        <p className="modal-subtitle">Set your preferences to find the perfect one.</p>
                     </div>
 
-                    <div className="gender-section-group">
-                        <div className="gender-modal-section">
-                            <label className="gender-modal-label">I am...</label>
-                            <div className="gender-options-row">
-                                <motion.button
-                                    className={`gender-option-card ${myGender === 'male' ? 'active' : ''}`}
-                                    onClick={() => setMyGender('male')}
-                                    whileHover={{ y: -2 }}
-                                    whileTap={{ scale: 0.98 }}
-                                >
-                                    <span className="option-icon">👨</span>
-                                    <span className="option-text">Male</span>
-                                </motion.button>
-                                <motion.button
-                                    className={`gender-option-card ${myGender === 'female' ? 'active' : ''}`}
-                                    onClick={() => setMyGender('female')}
-                                    whileHover={{ y: -2 }}
-                                    whileTap={{ scale: 0.98 }}
-                                >
-                                    <span className="option-icon">👩</span>
-                                    <span className="option-text">Female</span>
-                                </motion.button>
+                    {/* Scrollable Content */}
+                    <div className="gender-modal-content" style={{ flex: 1, overflowY: 'auto' }}>
+                        <div className="gender-filter-container">
+                            {/* I AM */}
+                            <div className="gender-section-group">
+                                <span className="filter-label">I am</span>
+                                <div className="filter-options">
+                                    <button
+                                        className={`filter-pill ${myGender === 'male' ? 'active' : ''}`}
+                                        onClick={() => setMyGender('male')}
+                                    >
+                                        Male
+                                    </button>
+                                    <button
+                                        className={`filter-pill ${myGender === 'female' ? 'active' : ''}`}
+                                        onClick={() => setMyGender('female')}
+                                    >
+                                        Female
+                                    </button>
+                                    <button
+                                        className={`filter-pill ${myGender === 'other' ? 'active' : ''}`}
+                                        onClick={() => setMyGender('other')}
+                                    >
+                                        Other
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* LOOKING FOR */}
+                            <div className="gender-section-group">
+                                <span className="filter-label">Looking for</span>
+                                <div className="filter-options">
+                                    <button
+                                        className={`filter-pill ${lookingFor === 'male' ? 'active' : ''}`}
+                                        onClick={() => setLookingFor('male')}
+                                    >
+                                        Male
+                                    </button>
+                                    <button
+                                        className={`filter-pill ${lookingFor === 'female' ? 'active' : ''}`}
+                                        onClick={() => setLookingFor('female')}
+                                    >
+                                        Female
+                                    </button>
+                                    <button
+                                        className={`filter-pill ${lookingFor === 'any' ? 'active' : ''}`}
+                                        onClick={() => setLookingFor('any')}
+                                    >
+                                        Anyone
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="gender-modal-divider">
-                            <span className="divider-icon">⚡</span>
-                        </div>
-
-                        <div className="gender-modal-section">
-                            <label className="gender-modal-label">Looking for...</label>
-                            <div className="gender-options-row">
-                                <motion.button
-                                    className={`gender-option-card ${lookingFor === 'male' ? 'active' : ''}`}
-                                    onClick={() => setLookingFor('male')}
-                                    whileHover={{ y: -2 }}
-                                    whileTap={{ scale: 0.98 }}
-                                >
-                                    <span className="option-icon">👨</span>
-                                    <span className="option-text">Male</span>
-                                </motion.button>
-                                <motion.button
-                                    className={`gender-option-card ${lookingFor === 'female' ? 'active' : ''}`}
-                                    onClick={() => setLookingFor('female')}
-                                    whileHover={{ y: -2 }}
-                                    whileTap={{ scale: 0.98 }}
-                                >
-                                    <span className="option-icon">👩</span>
-                                    <span className="option-text">Female</span>
-                                </motion.button>
-                                <motion.button
-                                    className={`gender-option-card ${lookingFor === 'any' ? 'active' : ''}`}
-                                    onClick={() => setLookingFor('any')}
-                                    whileHover={{ y: -2 }}
-                                    whileTap={{ scale: 0.98 }}
-                                >
-                                    <span className="option-icon">🌈</span>
-                                    <span className="option-text">Any</span>
-                                </motion.button>
+                        {/* Interests */}
+                        <div className="interests-section">
+                            <div className="interests-header">
+                                <span className="filter-label" style={{ marginBottom: 0 }}>Interests</span>
+                                <span className="interests-count">{selectedInterests.length} selected</span>
+                            </div>
+                            <div className="interests-grid">
+                                {INTERESTS.map(interest => (
+                                    <button
+                                        key={interest.id}
+                                        className={`interest-chip ${selectedInterests.includes(interest.id) ? 'selected' : ''}`}
+                                        onClick={() => toggleInterest(interest.id)}
+                                    >
+                                        <div className="interest-chip-icon">{interest.icon}</div>
+                                        <span>{interest.label}</span>
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     </div>
 
+                    {/* Footer */}
                     <div className="gender-modal-actions">
-                        <motion.button
-                            className="btn-primary-modal-premium"
-                            onClick={handleNext}
-                            whileHover={{ scale: 1.02, boxShadow: "0 0 20px rgba(99, 102, 241, 0.4)" }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            <span>Start Matching</span>
-                            <span className="btn-arrow">→</span>
-                        </motion.button>
-                        <button className="btn-text-modal" onClick={onCancel}>
-                            Cancel
+                        <button className="btn-confirm-glass" onClick={handleNext}>
+                            <span style={{ color: '#fde047', fontSize: '1.2em' }}>⚡</span>
+                            Start Matching
                         </button>
                     </div>
                 </motion.div>

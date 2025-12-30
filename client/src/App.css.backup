@@ -752,14 +752,6 @@ body {
   gap: 0;
   overflow: hidden;
   background: var(--color-gray-50);
-  box-sizing: border-box;
-}
-
-@media (min-width: 901px) {
-  .session-layout {
-    padding-top: 74px;
-    /* Compensate for fixed navbar */
-  }
 }
 
 /* Swipe Wrapper */
@@ -5662,7 +5654,7 @@ html {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 40px;
+  padding: 16px 40px;
   position: fixed;
   top: 0;
   left: 0;

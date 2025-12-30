@@ -31,6 +31,7 @@ const VideoPlayer = ({ src, ...props }) => {
     return (
         <video
             ref={videoRef}
+            className="video-full"
             controls
             playsInline
             // Allow other standard video props to be passed through
